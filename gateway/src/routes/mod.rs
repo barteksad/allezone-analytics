@@ -25,9 +25,18 @@ pub async fn user_tags(body: Json<UserTagRequest>) -> Response {
   ),
   responses((status=200, description="User profiles has been fetched successfully", body=UserProfilesResponse))
 )]
-pub async fn user_profiles(cookie: Path<String>, req: Query<UserProfilesRequest>) -> Response {
+pub async fn user_profiles(
+  cookie: Path<String>, 
+  req: Query<UserProfilesRequest>,   
+  #[cfg(feature = "query-debug")] 
+  body: Json<UserProfilesResponse>
+) -> Response {
   println!("{:?}", req);
   println!("{:?}", cookie);
+
+  #[cfg(feature = "query-debug")]
+  return body.into_response();
+  
   ().into_response()
 }
 
@@ -36,8 +45,14 @@ pub async fn user_profiles(cookie: Path<String>, req: Query<UserProfilesRequest>
   path="/aggregates",
   responses((status=200, description="Aggregates has been fetched successfully", body=AggregatesResponse))
 )]
-pub async fn aggregates(req: Query<AggregatesRequest>) -> Response {
+pub async fn aggregates(
+  req: Query<AggregatesRequest>,
+  #[cfg(feature = "query-debug")]
+  body: Json<AggregatesResponse>
+) -> Response {
   println!("{:?}", req);
+  #[cfg(feature = "query-debug")]
+  return body.into_response();
   ().into_response()
 }
 
@@ -50,7 +65,7 @@ pub struct UserTagRequest {
   device: Device,
   action: Action,
   origin: String,
-  product_info: ProductInfo,
+  product_info: ProductInfo,  
 }
 
 #[derive(Serialize, Debug)]
