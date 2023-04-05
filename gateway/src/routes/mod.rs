@@ -1,5 +1,5 @@
 use std::fmt;
-use axum::{response::{Response, IntoResponse}, extract::{Query, Path}, Json};
+use axum::{response::{Response, IntoResponse}, extract::{Query, Path}, Json, http::StatusCode};
 use chrono::{DateTime, Utc, TimeZone};
 use serde::{Deserialize, Serialize, de::{Visitor, self, MapAccess}};
 
@@ -11,9 +11,8 @@ static DEFAULT_LIMIT: usize = 200;
   request_body=UserTagRequest,
   responses((status=204, description="User tag has been added successfully", body=UserTagResponse))
 )]
-pub async fn user_tags(body: Json<UserTagRequest>) -> Response {
-  println!("{:?}", body);
-  ().into_response()
+pub async fn user_tags(body: Json<UserTagRequest>) -> StatusCode {
+  StatusCode::NO_CONTENT
 }
 
 #[utoipa::path(
@@ -31,8 +30,6 @@ pub async fn user_profiles(
   #[cfg(feature = "query-debug")] 
   body: Json<UserProfilesResponse>
 ) -> Response {
-  println!("{:?}", req);
-  println!("{:?}", cookie);
 
   #[cfg(feature = "query-debug")]
   return body.into_response();
@@ -50,7 +47,6 @@ pub async fn aggregates(
   #[cfg(feature = "query-debug")]
   body: Json<AggregatesResponse>
 ) -> Response {
-  println!("{:?}", req);
   #[cfg(feature = "query-debug")]
   return body.into_response();
   ().into_response()
@@ -79,12 +75,13 @@ pub struct UserProfilesRequest {
   limit: usize,
 }
 
-#[derive(Serialize, Debug)]
-struct UserProfilesResponse {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UserProfilesResponse {
   cookie: String,
   views: Vec<UserTagRequest>,
   buys: Vec<UserTagRequest>,
 }
+
 
 #[derive(Deserialize, Debug)]
 pub struct AggregatesRequest {
@@ -101,8 +98,8 @@ pub struct AggregatesRequest {
   category_id: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
-struct AggregatesResponse {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AggregatesResponse {
   columns: Vec<String>,
   rows: Vec<Vec<String>>,
 }
@@ -122,7 +119,7 @@ enum Action {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ProductInfo {
-  product_id: String,
+  product_id: usize,
   brand_id: String,
   category_id: String,
   price: i32,
