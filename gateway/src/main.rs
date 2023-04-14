@@ -1,10 +1,10 @@
 mod routes;
 
 use std::env;
+use axum::Extension;
 use dotenv::dotenv;
 
 use axum::{Router, routing::post};
-use tower_http::trace::{TraceLayer, Trace};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer};
@@ -28,7 +28,8 @@ fn main() {
         let app = Router::new()
             .route("/user_tags", post(user_tags))
             .route("/user_profiles/:cookie", post(user_profiles))
-            .route("/aggregates", post(aggregates));
+            .route("/aggregates", post(aggregates))
+            .layer(Extension(SharedKVStore::new()));
 
         axum::Server::bind(&format!("{}:{}", ip, port).parse().unwrap())
             .serve(app.into_make_service())

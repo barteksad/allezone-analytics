@@ -1,9 +1,16 @@
-use std::fmt;
-use axum::{response::{Response, IntoResponse}, extract::{Query, Path}, Json, http::StatusCode};
+mod kv;
+
+use std::{fmt, sync::Arc};
+use axum::{response::{Response, IntoResponse}, extract::{Query, Path}, Json, http::StatusCode, Extension};
 use chrono::{DateTime, Utc, TimeZone};
 use serde::{Deserialize, Serialize, de::{Visitor, self, MapAccess}};
 
+use self::kv::KVStore;
+
 static DEFAULT_LIMIT: usize = 200;
+
+#[derive(Clone)]
+pub struct SharedKVStore(Arc<KVStore>);
 
 #[utoipa::path(
   post,
@@ -11,8 +18,13 @@ static DEFAULT_LIMIT: usize = 200;
   request_body=UserTagRequest,
   responses((status=204, description="User tag has been added successfully", body=UserTagResponse))
 )]
-pub async fn user_tags(body: Json<UserTagRequest>) -> StatusCode {
-  StatusCode::NO_CONTENT
+pub async fn user_tags(Extension(SharedKVStore(kvStore)): Extension<SharedKVStore>, body: Json<UserTagRequest>) -> StatusCode {
+  match tokio::task::spawn_blocking(move || {
+    kvStore.add_user_tag(&body)
+  }).await {
+    Ok(_) => StatusCode::NO_CONTENT,
+    Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+  }
 }
 
 #[utoipa::path(
@@ -25,16 +37,34 @@ pub async fn user_tags(body: Json<UserTagRequest>) -> StatusCode {
   responses((status=200, description="User profiles has been fetched successfully", body=UserProfilesResponse))
 )]
 pub async fn user_profiles(
-  cookie: Path<String>, 
-  req: Query<UserProfilesRequest>,   
+  Path(cookie): Path<String>, 
+  Query(req): Query<UserProfilesRequest>,
+  Extension(SharedKVStore(kvStore)): Extension<SharedKVStore>,   
   #[cfg(feature = "query-debug")] 
-  body: Json<UserProfilesResponse>
+  body: Json<UserProfilesResponse>,
 ) -> Response {
 
-  #[cfg(feature = "query-debug")]
-  return body.into_response();
-  
-  ().into_response()
+  match tokio::task::spawn_blocking(move || {
+    kvStore.get_user_tags(&cookie, &req)
+  }).await {
+    Ok(Ok(response)) => {
+      let response_json = Json(response);
+      #[cfg(feature = "query-debug")]
+      assert!(response_json == body);
+      return response_json.into_response();
+    }
+    Ok(Err(e)) => {
+      tracing::error!("Error processing request: {:?}", e);
+      return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    Err(e) => {
+      tracing::error!("Error processing request: {:?}", e);
+      return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+  }
+
+  // #[cfg(feature = "query-debug")]
+  // return body.into_response();  
 }
 
 #[utoipa::path(
@@ -44,6 +74,7 @@ pub async fn user_profiles(
 )]
 pub async fn aggregates(
   req: Query<AggregatesRequest>,
+  Extension(SharedKVStore(kvStore)): Extension<SharedKVStore>,
   #[cfg(feature = "query-debug")]
   body: Json<AggregatesResponse>
 ) -> Response {
@@ -55,11 +86,11 @@ pub async fn aggregates(
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserTagRequest {
   time: DateTime<Utc>,
-  cookie: String,
+  pub cookie: String,
 
   country: String,
   device: Device,
-  action: Action,
+  pub action: Action,
   origin: String,
   product_info: ProductInfo,  
 }
@@ -111,8 +142,8 @@ enum Device {
   TV,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-enum Action {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Action {
   VIEW,
   BUY
 }
@@ -126,9 +157,21 @@ struct ProductInfo {
 }
 
 #[derive(Deserialize, Debug)]
-struct TimeRange {
+pub struct TimeRange {
   start: DateTime<Utc>,
   end: DateTime<Utc>,
+}
+
+impl SharedKVStore {
+  pub fn new() -> SharedKVStore {
+    SharedKVStore(Arc::new(KVStore::new()))
+  }
+}
+
+impl TimeRange {
+  pub fn is_in(&self, time: DateTime<Utc>) -> bool {
+    self.start <= time && time < self.end
+  }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -213,5 +256,14 @@ impl<'de> Deserialize<'de> for NAggregates {
           }
       }
       Ok(NAggregates(deserializer.deserialize_map(MyVisitor)?))
+  }
+}
+
+impl ToString for Action {
+  fn to_string(&self) -> String {
+    match self {
+      Action::VIEW => "VIEW".to_string(),
+      Action::BUY => "BUY".to_string(),
+    }
   }
 }

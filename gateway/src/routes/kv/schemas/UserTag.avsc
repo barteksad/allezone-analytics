@@ -1,0 +1,18 @@
+{
+  "namespace": "allezone-analytics",
+  "type": "record",
+  "name": "UserTag",
+  "fields" : [
+    {"name": "time", "type": "long"},
+    {"name": "cookie", "type": "string"},
+    {"name": "device", "type": "string"},
+    {"name": "action", "type": "string"},
+    {"name": "origin", "type": "string"},
+    {"name": "product_info", "type": "string", "fields": [
+      {"name": "product_id", "type": "string"},
+      {"name": "brand_id", "type": "string"},
+      {"name": "category_id", "type": "string"},
+      {"name": "price", "type": "int"}
+    ]}
+  ]
+}
