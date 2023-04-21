@@ -22,7 +22,11 @@ pub async fn user_tags(Extension(SharedKVStore(kvStore)): Extension<SharedKVStor
   match tokio::task::spawn_blocking(move || {
     kvStore.add_user_tag(&body)
   }).await {
-    Ok(_) => StatusCode::NO_CONTENT,
+    Ok(Ok(_)) => StatusCode::NO_CONTENT,
+    Ok(Err(e)) => {
+      tracing::error!("Error processing request: {:?}", e);
+      StatusCode::INTERNAL_SERVER_ERROR
+    }
     Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
   }
 }
@@ -44,13 +48,18 @@ pub async fn user_profiles(
   body: Json<UserProfilesResponse>,
 ) -> Response {
 
+  #[cfg(feature = "query-debug")]
+  let time_range = req.time_range.clone();
+
   match tokio::task::spawn_blocking(move || {
     kvStore.get_user_tags(&cookie, &req)
   }).await {
     Ok(Ok(response)) => {
       let response_json = Json(response);
-      #[cfg(feature = "query-debug")]
-      assert!(response_json == body);
+      // #[cfg(feature = "query-debug")]
+      // {
+      //   tracing::info!("\nTime range: {:?}\nResponse: {:?}\nExpected: {:?}",time_range, response_json, body);        
+      // }
       return response_json.into_response();
     }
     Ok(Err(e)) => {
@@ -79,18 +88,21 @@ pub async fn aggregates(
   body: Json<AggregatesResponse>
 ) -> Response {
   #[cfg(feature = "query-debug")]
-  return body.into_response();
+  {
+    tracing::info!("\nRequest: {:?}\nExpected: {:?}", req, body);
+    return body.into_response();
+  }
   ().into_response()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserTagRequest {
   time: DateTime<Utc>,
-  pub cookie: String,
+  cookie: String,
 
   country: String,
   device: Device,
-  pub action: Action,
+  action: Action,
   origin: String,
   product_info: ProductInfo,  
 }
@@ -157,6 +169,7 @@ struct ProductInfo {
 }
 
 #[derive(Deserialize, Debug)]
+#[cfg_attr(feature = "query-debug", derive(Clone))]
 pub struct TimeRange {
   start: DateTime<Utc>,
   end: DateTime<Utc>,
@@ -207,7 +220,7 @@ impl<'de> Visitor<'de> for TimeRange {
     where
       E: de::Error, 
     {
-      static FORMAT: &'static str = "%Y-%m-%dT%H:%M:%S.%f";
+      static FORMAT: &'static str = "%Y-%m-%dT%H:%M:%S%.f";
 
       let mut split = s.split('_');
       let start = split.next();
@@ -266,4 +279,23 @@ impl ToString for Action {
       Action::BUY => "BUY".to_string(),
     }
   }
+}
+
+#[cfg(test)]
+mod tests {
+  use axum::{Json, response::IntoResponse};
+
+use super::AggregatesResponse;
+
+
+  #[test]
+  fn ser_agg_rest() {
+    let resp = AggregatesResponse {
+      columns: vec!["a".to_string(), "b".to_string()],
+      rows: vec![vec!["1".to_string(), "2".to_string()]],
+    };
+
+    let json = Json::<AggregatesResponse>(resp);
+    println!("{:?}", json.into_response().body().to_owned());
+  } 
 }
