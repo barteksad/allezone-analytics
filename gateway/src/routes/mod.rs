@@ -18,16 +18,28 @@ pub struct SharedKVStore(Arc<KVStore>);
   request_body=UserTagRequest,
   responses((status=204, description="User tag has been added successfully", body=UserTagResponse))
 )]
-pub async fn user_tags(Extension(SharedKVStore(kvStore)): Extension<SharedKVStore>, body: Json<UserTagRequest>) -> StatusCode {
-  match tokio::task::spawn_blocking(move || {
-    kvStore.add_user_tag(&body)
-  }).await {
-    Ok(Ok(_)) => StatusCode::NO_CONTENT,
-    Ok(Err(e)) => {
-      tracing::error!("Error processing request: {:?}", e);
+pub async fn user_tags(Extension(SharedKVStore(kv_store)): Extension<SharedKVStore>, body: Json<UserTagRequest>) -> StatusCode {
+  let kv_store_clone = kv_store.clone();
+  let body_arc1 = Arc::new(body.0);
+  let body_arc2 = body_arc1.clone();
+  
+  let agg_item_fut = tokio::task::spawn(async move {
+    kv_store_clone.add_aggregates_item(body_arc1).await
+  });
+  let user_tag_fut = tokio::task::spawn_blocking(move || {
+    kv_store.add_user_tag(body_arc2)
+  });
+
+  match tokio::try_join!(agg_item_fut, user_tag_fut) {
+    Ok((Ok(_), Ok(_))) => StatusCode::NO_CONTENT,
+    Ok((e1, e2)) => {
+      tracing::error!("Error processing request: adding aggregate item result: {:?}, adding user tag result: {:?}", e1, e2);
       StatusCode::INTERNAL_SERVER_ERROR
     }
-    Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    Err(e) => {
+      tracing::error!("Error processing request: {:?}", e);
+      StatusCode::INTERNAL_SERVER_ERROR
+    },
   }
 }
 
@@ -43,7 +55,7 @@ pub async fn user_tags(Extension(SharedKVStore(kvStore)): Extension<SharedKVStor
 pub async fn user_profiles(
   Path(cookie): Path<String>, 
   Query(req): Query<UserProfilesRequest>,
-  Extension(SharedKVStore(kvStore)): Extension<SharedKVStore>,   
+  Extension(SharedKVStore(kv_store)): Extension<SharedKVStore>,   
   #[cfg(feature = "query-debug")] 
   body: Json<UserProfilesResponse>,
 ) -> Response {
@@ -52,7 +64,7 @@ pub async fn user_profiles(
   let time_range = req.time_range.clone();
 
   match tokio::task::spawn_blocking(move || {
-    kvStore.get_user_tags(&cookie, &req)
+    kv_store.get_user_tags(&cookie, &req)
   }).await {
     Ok(Ok(response)) => {
       let response_json = Json(response);

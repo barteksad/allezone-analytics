@@ -1,6 +1,6 @@
 use crate::routes::{Action, UserProfilesRequest, UserProfilesResponse, UserTagRequest};
 
-use std::env;
+use std::{env, time::Duration, sync::Arc};
 
 use aerospike::{
     as_blob, as_key,
@@ -11,46 +11,71 @@ use aerospike::{
 };
 use anyhow::Result;
 use avro_rs::{from_value, Schema, Writer};
+use chrono::{DateTime, Utc};
 use once_cell::sync::Lazy;
+use rdkafka::producer::{FutureProducer, FutureRecord};
+use serde::{Serialize, Deserialize};
 
 pub struct KVStore {
-    client: Client,
-    write_policy: WritePolicy,
-    list_policy: ListPolicy,
-    namespace: String,
+    as_client: Client,
+    as_write_policy: WritePolicy,
+    as_list_policy: ListPolicy,
+    as_namespace: String,
+    k_producer: FutureProducer,
+    k_topic: String,
 }
 
-static SCHEMAS: Lazy<[avro_rs::Schema; 1]> = Lazy::new(|| {
+static SCHEMAS: Lazy<[avro_rs::Schema; 2]> = Lazy::new(|| {
     [
         Schema::parse_str(include_str!("./schemas/UserTag.avsc")).unwrap(),
-        // Schema::parse_str(include_str!("./schemas/Aggregate.avsc")).unwrap(),
+        Schema::parse_str(include_str!("./schemas/AggregatesItem.avsc")).unwrap(),
     ]
 });
 
 enum SchemasNames {
     UserTag,
-    Aggregate,
+    AggregateItem,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AggregatesItem {
+    time: DateTime<Utc>,
+    action: Action,
+    origin: String,
+    brand_id: String,
+    category_id: String,
+    price: i32,
 }
 
 impl KVStore {
     pub fn new() -> KVStore {
         let client_policy = ClientPolicy::default();
-        let hosts = env::var("AEROSPIKE_HOSTS").expect("AEROSPIKE_HOSTS is not set");
-        let client = Client::new(&client_policy, &hosts).expect("Failed to connect to cluster");
+        let as_hosts = env::var("AEROSPIKE_HOSTS").expect("AEROSPIKE_HOSTS is not set");
+        let client = Client::new(&client_policy, &as_hosts).expect("Failed to connect to cluster");
         let write_policy = WritePolicy::new(0, Expiration::Never);
         let list_policy = ListPolicy::new(ListOrderType::Unordered, ListWriteFlags::Default);
         let namespace = env::var("AEROSPIKE_NAMESPACE").expect("AEROSPIKE_NAMESPACE is not set");
+        
+        let kafka_hosts = env::var("KAFKA_HOSTS").expect("KAFKA_HOSTS is not set");
+        let k_producer = rdkafka::config::ClientConfig::new()
+            .set("bootstrap.servers", &kafka_hosts)
+            .set("message.timeout.ms", "5000")
+            .create()
+            .expect("Kafka producer creation error");
+        let k_topic = env::var("KAFKA_TOPIC").expect("KAFKA_TOPIC is not set");
 
         KVStore {
-            client,
-            write_policy,
-            list_policy,
-            namespace,
+            as_client: client,
+            as_write_policy: write_policy,
+            as_list_policy: list_policy,
+            as_namespace: namespace,
+            k_producer,
+            k_topic,
         }
     }
 
-    pub fn add_user_tag(&self, user_tag: &UserTagRequest) -> Result<()> {
-        let key = as_key!(&self.namespace, &"user_tag".to_string(), &user_tag.cookie);
+    pub fn add_user_tag(&self, user_tag: Arc<UserTagRequest>) -> Result<()> {
+        let key = as_key!(&self.as_namespace, &"user_tag".to_string(), &user_tag.cookie);
         let action: String = user_tag.action.to_string();
 
         let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
@@ -58,11 +83,11 @@ impl KVStore {
         let val = as_blob!(writer.into_inner()?);
 
         let op = vec![
-            insert(&self.list_policy, &action, 0, &val),
+            insert(&self.as_list_policy, &action, 0, &val),
             trim(&action, 0, 200),
         ];
 
-        match self.client.operate(&self.write_policy, &key, &op) {
+        match self.as_client.operate(&self.as_write_policy, &key, &op) {
             Ok(_) => Ok(()),
             Err(e) => {
                 tracing::error!("Error adding new user tag!: {}", e);
@@ -76,7 +101,7 @@ impl KVStore {
         cookie: &str,
         req: &UserProfilesRequest,
     ) -> Result<UserProfilesResponse> {
-        let key = as_key!(&self.namespace, &"user_tag".to_string(), cookie);
+        let key = as_key!(&self.as_namespace, &"user_tag".to_string(), cookie);
 
         let action_buy = Action::BUY.to_string();
         let action_view = Action::VIEW.to_string();
@@ -96,7 +121,7 @@ impl KVStore {
             ),
         ];
 
-        let record = match self.client.operate(&self.write_policy, &key, &op) {
+        let record = match self.as_client.operate(&self.as_write_policy, &key, &op) {
             Ok(r) => r,
             Err(Error(
                 aerospike::errors::ErrorKind::ServerError(ResultCode::KeyNotFoundError),
@@ -163,6 +188,33 @@ impl KVStore {
             views: view_tags,
             buys: buy_tags,
         })
+    }
+
+    pub async fn add_aggregates_item(&self, user_tag: Arc<UserTagRequest>) -> Result<()> {
+        let aggregates_item = AggregatesItem {
+            time: user_tag.time,
+            action: user_tag.action.clone(),
+            origin: user_tag.origin.clone(),
+            brand_id: user_tag.product_info.brand_id.clone(),
+            category_id: user_tag.product_info.category_id.clone(),
+            price: user_tag.product_info.price.clone(),
+        };
+
+        let mut writer = Writer::new(&SCHEMAS[SchemasNames::AggregateItem as usize], Vec::<u8>::new());
+        writer.append_ser(&aggregates_item)?;
+
+        match self.k_producer.send(
+    FutureRecord::to(&self.k_topic)
+                .payload(&writer.into_inner()?)
+                .key(&user_tag.cookie),
+            Duration::from_secs(0)
+        ).await {
+            Ok(_) => Ok(()),
+            Err((e, _)) => {
+                tracing::error!("Error adding new user tag!: {:?}", e);
+                Err(anyhow::Error::msg(e.to_string()))
+            }
+        }
     }
 }
 

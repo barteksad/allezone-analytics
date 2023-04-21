@@ -1,0 +1,35 @@
+{
+  "namespace": "allezone-analytics",
+  "type": "record",
+  "name": "aggregatesitem",
+  "fields": [
+    {
+      "name": "time",
+      "type": "string"
+    },
+    {
+      "name": "action",
+      "type": "enum",
+      "symbols": [
+        "VIEW",
+        "BUY"
+      ]
+    },
+    {
+      "name": "origin",
+      "type": "string"
+    },
+    {
+      "name": "brand_id",
+      "type": "string"
+    },
+    {
+      "name": "category_id",
+      "type": "string"
+    },
+    {
+      "name": "price",
+      "type": "int"
+    }
+  ]
+}
