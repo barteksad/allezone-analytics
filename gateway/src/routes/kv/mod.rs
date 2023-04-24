@@ -25,10 +25,9 @@ pub struct KVStore {
     k_topic: String,
 }
 
-static SCHEMAS: Lazy<[avro_rs::Schema; 2]> = Lazy::new(|| {
+static SCHEMAS: Lazy<[avro_rs::Schema; 1]> = Lazy::new(|| {
     [
         Schema::parse_str(include_str!("./schemas/UserTag.avsc")).unwrap(),
-        Schema::parse_str(include_str!("./schemas/AggregatesItem.avsc")).unwrap(),
     ]
 });
 
@@ -220,88 +219,5 @@ impl KVStore {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Utc};
-    use serde::{Deserialize, Serialize};
 
-    use crate::routes::{Action, Device, ProductInfo};
-
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct Simple1 {
-        time: DateTime<Utc>,
-        cookie: String,
-
-        country: String,
-        device: Device,
-        action: Action,
-        origin: String,
-        product_info: ProductInfo,
-    }
-
-    // let schema = r#"
-    //     {
-    //       "namespace": "allezone-analytics",
-    //       "type": "record",
-    //       "name": "usertag",
-    //       "fields" : [
-    //         {"name": "time", "type": "string"},
-    //         {"name": "cookie", "type": "string"},
-    //         {"name": "device", "type": "string"},
-    //         {"name": "action", "type": "string"},
-    //         {"name": "origin", "type": "string"},
-    //         {"name": "product_info", "type": "record", "fields": [
-    //           {"name": "product_id", "type": "long"},
-    //           {"name": "brand_id", "type": "string"},
-    //           {"name": "category_id", "type": "string"},
-    //           {"name": "price", "type": "int"}
-    //           ]}
-    //           ]
-    //         }"#;
-
-    #[test]
-    fn schemas() {
-        let schema = r#"
-        {
-          "namespace": "allezone-analytics",
-          "type": "record",
-          "name": "usertag",
-          "fields" : [
-            {"name": "time", "type": "string"},
-            {"name": "cookie", "type": "string"},
-            {"name": "country", "type": "string"},
-            {"name": "device", "type": "enum", "symbols": ["PC", "MOBILE", "TV"]},
-            {"name": "action", "type": "enum", "symbols": ["VIEW", "BUY"]},
-            {"name": "origin", "type": "string"},
-            {"name": "product_info", "type": "record", "fields": [
-              {"name": "product_id", "type": "long"},
-              {"name": "brand_id", "type": "string"},
-              {"name": "category_id", "type": "string"},
-              {"name": "price", "type": "int"}
-            ]}
-              ]
-            }"#;
-
-        let x = Simple1 {
-            time: Utc::now(),
-            cookie: "123".to_string(),
-            country: "RU".to_string(),
-            device: Device::PC,
-            action: Action::BUY,
-            origin: "google".to_string(),
-            product_info: ProductInfo {
-                product_id: 123,
-                brand_id: "123".to_string(),
-                category_id: "123".to_string(),
-                price: 123,
-            },
-        };
-
-        let schema = avro_rs::Schema::parse_str(schema).unwrap();
-        let mut writer = avro_rs::Writer::new(&schema, Vec::new());
-        writer.append_ser(&x).unwrap();
-        let data = writer.into_inner().unwrap();
-        let mut reader = avro_rs::Reader::with_schema(&schema, &data[..]).unwrap();
-        let value = reader.next().unwrap().unwrap();
-        let x: Simple1 = avro_rs::from_value(&value).unwrap();
-        println!("{:?}", x);
-    }
 }
