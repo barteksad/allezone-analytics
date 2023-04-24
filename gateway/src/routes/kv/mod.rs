@@ -25,26 +25,32 @@ pub struct KVStore {
     k_topic: String,
 }
 
-static SCHEMAS: Lazy<[avro_rs::Schema; 2]> = Lazy::new(|| {
+static SCHEMAS: Lazy<[avro_rs::Schema; 3]> = Lazy::new(|| {
     [
         Schema::parse_str(include_str!("./schemas/UserTag.avsc")).unwrap(),
         Schema::parse_str(include_str!("./schemas/AggregatesItem.avsc")).unwrap(),
+        Schema::parse_str(include_str!("./schemas/AggregatesPrice.avsc")).unwrap(),
     ]
 });
 
 enum SchemasNames {
     UserTag,
-    AggregateItem,
+    AggregatesItem,
+    AggregatesPrice,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct AggregatesItem {
-    time: DateTime<Utc>,
-    action: Action,
+    time: i64,
+    action: String,
     origin: String,
     brand_id: String,
     category_id: String,
-    price: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AggregatesPrice {
+    price: i32
 }
 
 impl KVStore {
@@ -192,21 +198,25 @@ impl KVStore {
 
     pub async fn add_aggregates_item(&self, user_tag: Arc<UserTagRequest>) -> Result<()> {
         let aggregates_item = AggregatesItem {
-            time: user_tag.time,
-            action: user_tag.action.clone(),
+            time: user_tag.time.timestamp_millis(),
+            action: user_tag.action.to_string(),
             origin: user_tag.origin.clone(),
             brand_id: user_tag.product_info.brand_id.clone(),
             category_id: user_tag.product_info.category_id.clone(),
-            price: user_tag.product_info.price.clone(),
+        };
+        let aggregates_price = AggregatesPrice {
+            price: user_tag.product_info.price,
         };
 
-        let mut writer = Writer::new(&SCHEMAS[SchemasNames::AggregateItem as usize], Vec::<u8>::new());
-        writer.append_ser(&aggregates_item)?;
+        let mut writer_item = Writer::new(&SCHEMAS[SchemasNames::AggregatesItem as usize], Vec::<u8>::new());
+        let mut writer_price = Writer::new(&SCHEMAS[SchemasNames::AggregatesPrice as usize], Vec::<u8>::new());
+        writer_item.append_ser(&aggregates_item)?;
+        writer_price.append_ser(&aggregates_price)?;
 
         match self.k_producer.send(
     FutureRecord::to(&self.k_topic)
-                .payload(&writer.into_inner()?)
-                .key(&user_tag.cookie),
+                .payload(&writer_price.into_inner()?)
+                .key(&writer_item.into_inner()?),
             Duration::from_secs(0)
         ).await {
             Ok(_) => Ok(()),
@@ -220,88 +230,63 @@ impl KVStore {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, Utc};
-    use serde::{Deserialize, Serialize};
+    use avro_rs::{Writer, Reader};
+    use chrono::Utc;
 
-    use crate::routes::{Action, Device, ProductInfo};
+    use crate::routes::{Action, Device, ProductInfo, UserTagRequest, kv::{SCHEMAS, SchemasNames}};
 
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct Simple1 {
-        time: DateTime<Utc>,
-        cookie: String,
-
-        country: String,
-        device: Device,
-        action: Action,
-        origin: String,
-        product_info: ProductInfo,
-    }
-
-    // let schema = r#"
-    //     {
-    //       "namespace": "allezone-analytics",
-    //       "type": "record",
-    //       "name": "usertag",
-    //       "fields" : [
-    //         {"name": "time", "type": "string"},
-    //         {"name": "cookie", "type": "string"},
-    //         {"name": "device", "type": "string"},
-    //         {"name": "action", "type": "string"},
-    //         {"name": "origin", "type": "string"},
-    //         {"name": "product_info", "type": "record", "fields": [
-    //           {"name": "product_id", "type": "long"},
-    //           {"name": "brand_id", "type": "string"},
-    //           {"name": "category_id", "type": "string"},
-    //           {"name": "price", "type": "int"}
-    //           ]}
-    //           ]
-    //         }"#;
+    use super::{AggregatesItem, AggregatesPrice};
 
     #[test]
-    fn schemas() {
-        let schema = r#"
+    fn test_schemas() {
         {
-          "namespace": "allezone-analytics",
-          "type": "record",
-          "name": "usertag",
-          "fields" : [
-            {"name": "time", "type": "string"},
-            {"name": "cookie", "type": "string"},
-            {"name": "country", "type": "string"},
-            {"name": "device", "type": "enum", "symbols": ["PC", "MOBILE", "TV"]},
-            {"name": "action", "type": "enum", "symbols": ["VIEW", "BUY"]},
-            {"name": "origin", "type": "string"},
-            {"name": "product_info", "type": "record", "fields": [
-              {"name": "product_id", "type": "long"},
-              {"name": "brand_id", "type": "string"},
-              {"name": "category_id", "type": "string"},
-              {"name": "price", "type": "int"}
-            ]}
-              ]
-            }"#;
 
-        let x = Simple1 {
-            time: Utc::now(),
-            cookie: "123".to_string(),
-            country: "RU".to_string(),
-            device: Device::PC,
-            action: Action::BUY,
-            origin: "google".to_string(),
-            product_info: ProductInfo {
-                product_id: 123,
-                brand_id: "123".to_string(),
-                category_id: "123".to_string(),
+            let user_tag_request = UserTagRequest {
+                time: Utc::now(),
+                cookie: "abc".into(),
+                country: "abc".into(),
+                device: Device::MOBILE,
+                action: Action::BUY,
+                origin: "abc".into(),
+                product_info: ProductInfo { product_id: 1, brand_id: "123".into(), category_id: "abc".into(), price: 1 },
+            };
+            
+            let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());;
+            writer.append_ser(&user_tag_request).unwrap();
+            let data = writer.into_inner().unwrap();
+            let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize],  &data[..]).unwrap();
+            let value = reader.next().unwrap().unwrap();
+            assert!(avro_rs::from_value::<UserTagRequest>(&value).is_ok());
+        }
+
+        {
+            let aggregates_item = AggregatesItem {
+                time: Utc::now().timestamp_millis(),
+                action: Action::VIEW.to_string(),
+                origin: "abc".into(),
+                brand_id: "abc".into(),
+                category_id: "abc".into(),
+            };
+
+            let mut writer = Writer::new(&SCHEMAS[SchemasNames::AggregatesItem as usize], Vec::<u8>::new());;
+            writer.append_ser(&aggregates_item).unwrap();
+            let data = writer.into_inner().unwrap();
+            let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::AggregatesItem as usize],  &data[..]).unwrap();
+            let value = reader.next().unwrap().unwrap();
+            assert!(avro_rs::from_value::<AggregatesItem>(&value).is_ok());
+        }
+
+        {
+            let aggregates_price = AggregatesPrice {
                 price: 123,
-            },
-        };
+            };
 
-        let schema = avro_rs::Schema::parse_str(schema).unwrap();
-        let mut writer = avro_rs::Writer::new(&schema, Vec::new());
-        writer.append_ser(&x).unwrap();
-        let data = writer.into_inner().unwrap();
-        let mut reader = avro_rs::Reader::with_schema(&schema, &data[..]).unwrap();
-        let value = reader.next().unwrap().unwrap();
-        let x: Simple1 = avro_rs::from_value(&value).unwrap();
-        println!("{:?}", x);
+            let mut writer = Writer::new(&SCHEMAS[SchemasNames::AggregatesPrice as usize], Vec::<u8>::new());;
+            writer.append_ser(&aggregates_price).unwrap();
+            let data = writer.into_inner().unwrap();
+            let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::AggregatesPrice as usize],  &data[..]).unwrap();
+            let value = reader.next().unwrap().unwrap();
+            assert!(avro_rs::from_value::<AggregatesPrice>(&value).is_ok());
+        }
     }
 }

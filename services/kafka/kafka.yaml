@@ -37,13 +37,13 @@
               url: https://downloads.apache.org/kafka/3.3.2/kafka_2.12-3.3.2.tgz
               dest: ~/kafka.tgz
               force: true
-       when: ansible_facts.services['kafka.service'] is not defined and ansible_facts.services['zookeeper.service'] is not defined
+      #  when: ansible_facts.services['kafka.service'] is not defined and ansible_facts.services['zookeeper.service'] is not defined
 
      - name: Decompress Kafka
        become: true
        become_user: root
        command: bash -c "tar xzvf ~/kafka.tgz -C /opt/kafka --strip-components=1"
-       when: ansible_facts.services['kafka.service'] is not defined and ansible_facts.services['zookeeper.service'] is not defined
+      #  when: ansible_facts.services['kafka.service'] is not defined and ansible_facts.services['zookeeper.service'] is not defined
 
      - name: Chown kafka binaries
        become: true
@@ -52,7 +52,7 @@
               owner: kafka
               group: kafka
               recurse: yes
-       when: ansible_facts.services['kafka.service'] is not defined and ansible_facts.services['zookeeper.service'] is not defined
+      #  when: ansible_facts.services['kafka.service'] is not defined and ansible_facts.services['zookeeper.service'] is not defined
 
      - name: Install JRE
        become: true

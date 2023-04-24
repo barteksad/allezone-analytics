@@ -1,0 +1,11 @@
+{
+  "namespace": "allezone_analytics",
+  "type": "record",
+  "name": "AggregatesPrice",
+  "fields": [
+    {
+      "name": "price",
+      "type": "int"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "namespace": "allezone-analytics",
+  "namespace": "allezone_analytics",
   "type": "record",
   "name": "usertag",
   "fields": [

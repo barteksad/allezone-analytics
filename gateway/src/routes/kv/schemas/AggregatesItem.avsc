@@ -1,19 +1,18 @@
 {
-  "namespace": "allezone-analytics",
+  "namespace": "allezone_analytics",
   "type": "record",
-  "name": "aggregatesitem",
+  "name": "AggregatesItem",
   "fields": [
     {
       "name": "time",
-      "type": "string"
+      "type": {
+        "type": "long",
+      "logicalType": "timestamp-millis"
+      }
     },
     {
       "name": "action",
-      "type": "enum",
-      "symbols": [
-        "VIEW",
-        "BUY"
-      ]
+      "type": "string"
     },
     {
       "name": "origin",
@@ -26,10 +25,6 @@
     {
       "name": "category_id",
       "type": "string"
-    },
-    {
-      "name": "price",
-      "type": "int"
     }
   ]
 }
