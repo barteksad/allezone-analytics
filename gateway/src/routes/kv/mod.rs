@@ -10,7 +10,7 @@ use aerospike::{
     Client, ClientPolicy, Error, Expiration, ResultCode, Value, WritePolicy,
 };
 use anyhow::Result;
-use apache_avro::{from_value, Schema, to_avro_datum, to_value};
+use apache_avro::{from_value, Schema, to_avro_datum, to_value, from_avro_datum};
 use once_cell::sync::Lazy;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::{Serialize, Deserialize};
@@ -83,9 +83,9 @@ impl KVStore {
         let key = as_key!(&self.as_namespace, &"user_tag".to_string(), &user_tag.cookie);
         let action: String = user_tag.action.to_string();
 
-        let mut writer = apache_avro::Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
-        writer.append_ser(user_tag)?;
-        let val = as_blob!(writer.into_inner()?);
+        let schema: &Schema = &SCHEMAS[SchemasNames::UserTag as usize]; 
+        let datum = to_avro_datum(schema, to_value(&user_tag)?)?;
+        let val = as_blob!(datum);
 
         let op = vec![
             insert(&self.as_list_policy, &action, 0, &val),
@@ -155,12 +155,13 @@ impl KVStore {
                 }
             }?;
 
-            let mut reader =
-                apache_avro::Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize], &data[..])?;
-            match reader.next() {
-                Some(record) => Ok(from_value::<UserTagRequest>(&record?)?),
-                None => Err(anyhow::Error::msg(
-                    "Error: invalid data type in user record",
+            let schema: &Schema = &SCHEMAS[SchemasNames::UserTag as usize];
+            let decoded_value = from_avro_datum(schema, &mut data.as_slice(), None);
+
+            match decoded_value {
+                Ok(value) => Ok(from_value::<UserTagRequest>(&value)?),
+                Err(e) => Err(anyhow::Error::msg(
+                    format!("Error: invalid data type in user record: {:?}", e)
                 )),
             }
         };
@@ -230,7 +231,7 @@ impl KVStore {
 
 #[cfg(test)]
 mod tests {
-    use apache_avro::{Writer, Reader, to_avro_datum, to_value, Schema};
+    use apache_avro::{Writer, Reader, to_avro_datum, to_value, Schema, from_avro_datum};
     use chrono::Utc;
 
     use crate::routes::{Action, Device, ProductInfo, UserTagRequest, kv::{SCHEMAS, SchemasNames}};
@@ -250,12 +251,12 @@ mod tests {
                 origin: "abc".into(),
                 product_info: ProductInfo { product_id: 1, brand_id: "123".into(), category_id: "abc".into(), price: 1 },
             };
-            let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
-            writer.append_ser(&user_tag_request).unwrap();
-            let data = writer.into_inner().unwrap();
-            let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize],  &data[..]).unwrap();
-            let value = reader.next().unwrap().unwrap();
-            assert!(apache_avro::from_value::<UserTagRequest>(&value).is_ok());
+            let schema: &Schema = &SCHEMAS[SchemasNames::UserTag as usize]; 
+            let datum = to_avro_datum(schema, to_value(&user_tag_request).unwrap()).unwrap();
+            let decoded_value = from_avro_datum(schema, &mut datum.as_slice(), None).unwrap();
+            let decoded_request = apache_avro::from_value::<UserTagRequest>(&decoded_value);
+            assert!(decoded_request.is_ok());
+            assert!(decoded_request.unwrap().time == user_tag_request.time);
         }
 
         {
