@@ -10,8 +10,7 @@ use aerospike::{
     Client, ClientPolicy, Error, Expiration, ResultCode, Value, WritePolicy,
 };
 use anyhow::Result;
-use avro_rs::{from_value, Schema, Writer};
-use chrono::{DateTime, Utc};
+use apache_avro::{from_value, Schema, to_avro_datum, to_value};
 use once_cell::sync::Lazy;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::{Serialize, Deserialize};
@@ -25,25 +24,32 @@ pub struct KVStore {
     k_topic: String,
 }
 
-static SCHEMAS: Lazy<[avro_rs::Schema; 1]> = Lazy::new(|| {
+static SCHEMAS: Lazy<[apache_avro::Schema; 3]> = Lazy::new(|| {
     [
         Schema::parse_str(include_str!("./schemas/UserTag.avsc")).unwrap(),
+        Schema::parse_str(include_str!("./schemas/AggregatesItem.avsc")).unwrap(),
+        Schema::parse_str(include_str!("./schemas/AggregatesPrice.avsc")).unwrap(),
     ]
 });
 
 enum SchemasNames {
     UserTag,
-    AggregateItem,
+    AggregatesItem,
+    AggregatesPrice,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct AggregatesItem {
-    time: DateTime<Utc>,
-    action: Action,
+    time: i64,
+    action: String,
     origin: String,
     brand_id: String,
     category_id: String,
-    price: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AggregatesPrice {
+    price: i32
 }
 
 impl KVStore {
@@ -77,7 +83,7 @@ impl KVStore {
         let key = as_key!(&self.as_namespace, &"user_tag".to_string(), &user_tag.cookie);
         let action: String = user_tag.action.to_string();
 
-        let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
+        let mut writer = apache_avro::Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
         writer.append_ser(user_tag)?;
         let val = as_blob!(writer.into_inner()?);
 
@@ -150,7 +156,7 @@ impl KVStore {
             }?;
 
             let mut reader =
-                avro_rs::Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize], &data[..])?;
+                apache_avro::Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize], &data[..])?;
             match reader.next() {
                 Some(record) => Ok(from_value::<UserTagRequest>(&record?)?),
                 None => Err(anyhow::Error::msg(
@@ -191,21 +197,26 @@ impl KVStore {
 
     pub async fn add_aggregates_item(&self, user_tag: Arc<UserTagRequest>) -> Result<()> {
         let aggregates_item = AggregatesItem {
-            time: user_tag.time,
-            action: user_tag.action.clone(),
+            time: user_tag.time.timestamp_millis(),
+            action: user_tag.action.to_string(),
             origin: user_tag.origin.clone(),
             brand_id: user_tag.product_info.brand_id.clone(),
             category_id: user_tag.product_info.category_id.clone(),
-            price: user_tag.product_info.price.clone(),
+        };
+        let aggregates_price = AggregatesPrice {
+            price: user_tag.product_info.price,
         };
 
-        let mut writer = Writer::new(&SCHEMAS[SchemasNames::AggregateItem as usize], Vec::<u8>::new());
-        writer.append_ser(&aggregates_item)?;
+        let item_schema: &Schema = &SCHEMAS[SchemasNames::AggregatesItem as usize];
+        let price_schema: &Schema = &SCHEMAS[SchemasNames::AggregatesPrice as usize];
+        
+        let item_data = to_avro_datum(item_schema, to_value(aggregates_item)?)?;
+        let price_data = to_avro_datum(price_schema, to_value(aggregates_price)?)?;
 
         match self.k_producer.send(
     FutureRecord::to(&self.k_topic)
-                .payload(&writer.into_inner()?)
-                .key(&user_tag.cookie),
+                .payload(&price_data)
+                .key(&item_data),
             Duration::from_secs(0)
         ).await {
             Ok(_) => Ok(()),
@@ -219,5 +230,56 @@ impl KVStore {
 
 #[cfg(test)]
 mod tests {
+    use apache_avro::{Writer, Reader, to_avro_datum, to_value, Schema};
+    use chrono::Utc;
 
+    use crate::routes::{Action, Device, ProductInfo, UserTagRequest, kv::{SCHEMAS, SchemasNames}};
+
+    use super::{AggregatesItem, AggregatesPrice};
+
+    #[test]
+    fn test_schemas() {
+        {
+
+            let user_tag_request = UserTagRequest {
+                time: Utc::now(),
+                cookie: "abc".into(),
+                country: "abc".into(),
+                device: Device::MOBILE,
+                action: Action::BUY,
+                origin: "abc".into(),
+                product_info: ProductInfo { product_id: 1, brand_id: "123".into(), category_id: "abc".into(), price: 1 },
+            };
+            let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
+            writer.append_ser(&user_tag_request).unwrap();
+            let data = writer.into_inner().unwrap();
+            let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize],  &data[..]).unwrap();
+            let value = reader.next().unwrap().unwrap();
+            assert!(apache_avro::from_value::<UserTagRequest>(&value).is_ok());
+        }
+
+        {
+            let aggregates_item = AggregatesItem {
+                time: Utc::now().timestamp_millis(),
+                action: Action::VIEW.to_string(),
+                origin: "abc".into(),
+                brand_id: "abc".into(),
+                category_id: "abc".into(),
+            };
+
+            let schema: &Schema = &SCHEMAS[SchemasNames::AggregatesItem as usize]; 
+            let datum = to_avro_datum(schema, to_value(&aggregates_item).unwrap()).unwrap();
+            println!("{:?}, {:}", datum, datum.len());
+        }
+
+        {
+            let aggregates_price = AggregatesPrice {
+                price: 123,
+            };
+
+            let schema: &Schema = &SCHEMAS[SchemasNames::AggregatesPrice as usize]; 
+            let datum = to_avro_datum(schema, to_value(&aggregates_price).unwrap()).unwrap();
+            println!("{:?}, {:}", datum, datum.len());
+        }
+    }
 }
