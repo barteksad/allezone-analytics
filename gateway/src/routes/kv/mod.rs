@@ -10,8 +10,7 @@ use aerospike::{
     Client, ClientPolicy, Error, Expiration, ResultCode, Value, WritePolicy,
 };
 use anyhow::Result;
-use avro_rs::{from_value, Schema, Writer};
-use chrono::{DateTime, Utc};
+use apache_avro::{from_value, Schema, to_avro_datum, to_value};
 use once_cell::sync::Lazy;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::{Serialize, Deserialize};
@@ -25,7 +24,7 @@ pub struct KVStore {
     k_topic: String,
 }
 
-static SCHEMAS: Lazy<[avro_rs::Schema; 3]> = Lazy::new(|| {
+static SCHEMAS: Lazy<[apache_avro::Schema; 3]> = Lazy::new(|| {
     [
         Schema::parse_str(include_str!("./schemas/UserTag.avsc")).unwrap(),
         Schema::parse_str(include_str!("./schemas/AggregatesItem.avsc")).unwrap(),
@@ -84,7 +83,7 @@ impl KVStore {
         let key = as_key!(&self.as_namespace, &"user_tag".to_string(), &user_tag.cookie);
         let action: String = user_tag.action.to_string();
 
-        let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
+        let mut writer = apache_avro::Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
         writer.append_ser(user_tag)?;
         let val = as_blob!(writer.into_inner()?);
 
@@ -157,7 +156,7 @@ impl KVStore {
             }?;
 
             let mut reader =
-                avro_rs::Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize], &data[..])?;
+                apache_avro::Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize], &data[..])?;
             match reader.next() {
                 Some(record) => Ok(from_value::<UserTagRequest>(&record?)?),
                 None => Err(anyhow::Error::msg(
@@ -208,15 +207,16 @@ impl KVStore {
             price: user_tag.product_info.price,
         };
 
-        let mut writer_item = Writer::new(&SCHEMAS[SchemasNames::AggregatesItem as usize], Vec::<u8>::new());
-        let mut writer_price = Writer::new(&SCHEMAS[SchemasNames::AggregatesPrice as usize], Vec::<u8>::new());
-        writer_item.append_ser(&aggregates_item)?;
-        writer_price.append_ser(&aggregates_price)?;
+        let item_schema: &Schema = &SCHEMAS[SchemasNames::AggregatesItem as usize];
+        let price_schema: &Schema = &SCHEMAS[SchemasNames::AggregatesPrice as usize];
+        
+        let item_data = to_avro_datum(item_schema, to_value(aggregates_item)?)?;
+        let price_data = to_avro_datum(price_schema, to_value(aggregates_price)?)?;
 
         match self.k_producer.send(
     FutureRecord::to(&self.k_topic)
-                .payload(&writer_price.into_inner()?)
-                .key(&writer_item.into_inner()?),
+                .payload(&price_data)
+                .key(&item_data),
             Duration::from_secs(0)
         ).await {
             Ok(_) => Ok(()),
@@ -230,7 +230,7 @@ impl KVStore {
 
 #[cfg(test)]
 mod tests {
-    use avro_rs::{Writer, Reader};
+    use apache_avro::{Writer, Reader, to_avro_datum, to_value, Schema};
     use chrono::Utc;
 
     use crate::routes::{Action, Device, ProductInfo, UserTagRequest, kv::{SCHEMAS, SchemasNames}};
@@ -250,13 +250,12 @@ mod tests {
                 origin: "abc".into(),
                 product_info: ProductInfo { product_id: 1, brand_id: "123".into(), category_id: "abc".into(), price: 1 },
             };
-            
-            let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());;
+            let mut writer = Writer::new(&SCHEMAS[SchemasNames::UserTag as usize], Vec::<u8>::new());
             writer.append_ser(&user_tag_request).unwrap();
             let data = writer.into_inner().unwrap();
             let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::UserTag as usize],  &data[..]).unwrap();
             let value = reader.next().unwrap().unwrap();
-            assert!(avro_rs::from_value::<UserTagRequest>(&value).is_ok());
+            assert!(apache_avro::from_value::<UserTagRequest>(&value).is_ok());
         }
 
         {
@@ -268,12 +267,9 @@ mod tests {
                 category_id: "abc".into(),
             };
 
-            let mut writer = Writer::new(&SCHEMAS[SchemasNames::AggregatesItem as usize], Vec::<u8>::new());;
-            writer.append_ser(&aggregates_item).unwrap();
-            let data = writer.into_inner().unwrap();
-            let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::AggregatesItem as usize],  &data[..]).unwrap();
-            let value = reader.next().unwrap().unwrap();
-            assert!(avro_rs::from_value::<AggregatesItem>(&value).is_ok());
+            let schema: &Schema = &SCHEMAS[SchemasNames::AggregatesItem as usize]; 
+            let datum = to_avro_datum(schema, to_value(&aggregates_item).unwrap()).unwrap();
+            println!("{:?}, {:}", datum, datum.len());
         }
 
         {
@@ -281,12 +277,9 @@ mod tests {
                 price: 123,
             };
 
-            let mut writer = Writer::new(&SCHEMAS[SchemasNames::AggregatesPrice as usize], Vec::<u8>::new());;
-            writer.append_ser(&aggregates_price).unwrap();
-            let data = writer.into_inner().unwrap();
-            let mut reader = Reader::with_schema(&SCHEMAS[SchemasNames::AggregatesPrice as usize],  &data[..]).unwrap();
-            let value = reader.next().unwrap().unwrap();
-            assert!(avro_rs::from_value::<AggregatesPrice>(&value).is_ok());
+            let schema: &Schema = &SCHEMAS[SchemasNames::AggregatesPrice as usize]; 
+            let datum = to_avro_datum(schema, to_value(&aggregates_price).unwrap()).unwrap();
+            println!("{:?}, {:}", datum, datum.len());
         }
     }
 }

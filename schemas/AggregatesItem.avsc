@@ -11,6 +11,10 @@
       }
     },
     {
+      "name": "action",
+      "type": "string"
+    },
+    {
       "name": "origin",
       "type": "string"
     },

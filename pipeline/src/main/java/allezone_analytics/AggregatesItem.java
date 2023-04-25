@@ -14,10 +14,10 @@ import org.apache.avro.message.SchemaStore;
 
 @org.apache.avro.specific.AvroGenerated
 public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
-  private static final long serialVersionUID = 3347091981932601970L;
+  private static final long serialVersionUID = 7618211461381838297L;
 
 
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"AggregatesItem\",\"namespace\":\"allezone_analytics\",\"fields\":[{\"name\":\"time\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},{\"name\":\"origin\",\"type\":\"string\"},{\"name\":\"brand_id\",\"type\":\"string\"},{\"name\":\"category_id\",\"type\":\"string\"}]}");
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"AggregatesItem\",\"namespace\":\"allezone_analytics\",\"fields\":[{\"name\":\"time\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},{\"name\":\"action\",\"type\":\"string\"},{\"name\":\"origin\",\"type\":\"string\"},{\"name\":\"brand_id\",\"type\":\"string\"},{\"name\":\"category_id\",\"type\":\"string\"}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static final SpecificData MODEL$ = new SpecificData();
@@ -77,6 +77,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
   }
 
   private java.time.Instant time;
+  private java.lang.CharSequence action;
   private java.lang.CharSequence origin;
   private java.lang.CharSequence brand_id;
   private java.lang.CharSequence category_id;
@@ -91,12 +92,14 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
   /**
    * All-args constructor.
    * @param time The new value for time
+   * @param action The new value for action
    * @param origin The new value for origin
    * @param brand_id The new value for brand_id
    * @param category_id The new value for category_id
    */
-  public AggregatesItem(java.time.Instant time, java.lang.CharSequence origin, java.lang.CharSequence brand_id, java.lang.CharSequence category_id) {
+  public AggregatesItem(java.time.Instant time, java.lang.CharSequence action, java.lang.CharSequence origin, java.lang.CharSequence brand_id, java.lang.CharSequence category_id) {
     this.time = time.truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+    this.action = action;
     this.origin = origin;
     this.brand_id = brand_id;
     this.category_id = category_id;
@@ -113,9 +116,10 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
   public java.lang.Object get(int field$) {
     switch (field$) {
     case 0: return time;
-    case 1: return origin;
-    case 2: return brand_id;
-    case 3: return category_id;
+    case 1: return action;
+    case 2: return origin;
+    case 3: return brand_id;
+    case 4: return category_id;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
@@ -123,6 +127,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
   private static final org.apache.avro.Conversion<?>[] conversions =
       new org.apache.avro.Conversion<?>[] {
       new org.apache.avro.data.TimeConversions.TimestampMillisConversion(),
+      null,
       null,
       null,
       null,
@@ -140,9 +145,10 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
   public void put(int field$, java.lang.Object value$) {
     switch (field$) {
     case 0: time = (java.time.Instant)value$; break;
-    case 1: origin = (java.lang.CharSequence)value$; break;
-    case 2: brand_id = (java.lang.CharSequence)value$; break;
-    case 3: category_id = (java.lang.CharSequence)value$; break;
+    case 1: action = (java.lang.CharSequence)value$; break;
+    case 2: origin = (java.lang.CharSequence)value$; break;
+    case 3: brand_id = (java.lang.CharSequence)value$; break;
+    case 4: category_id = (java.lang.CharSequence)value$; break;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
   }
@@ -162,6 +168,23 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
    */
   public void setTime(java.time.Instant value) {
     this.time = value.truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+  }
+
+  /**
+   * Gets the value of the 'action' field.
+   * @return The value of the 'action' field.
+   */
+  public java.lang.CharSequence getAction() {
+    return action;
+  }
+
+
+  /**
+   * Sets the value of the 'action' field.
+   * @param value the value to set.
+   */
+  public void setAction(java.lang.CharSequence value) {
+    this.action = value;
   }
 
   /**
@@ -257,6 +280,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
     implements org.apache.avro.data.RecordBuilder<AggregatesItem> {
 
     private java.time.Instant time;
+    private java.lang.CharSequence action;
     private java.lang.CharSequence origin;
     private java.lang.CharSequence brand_id;
     private java.lang.CharSequence category_id;
@@ -276,17 +300,21 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
         this.time = data().deepCopy(fields()[0].schema(), other.time);
         fieldSetFlags()[0] = other.fieldSetFlags()[0];
       }
-      if (isValidValue(fields()[1], other.origin)) {
-        this.origin = data().deepCopy(fields()[1].schema(), other.origin);
+      if (isValidValue(fields()[1], other.action)) {
+        this.action = data().deepCopy(fields()[1].schema(), other.action);
         fieldSetFlags()[1] = other.fieldSetFlags()[1];
       }
-      if (isValidValue(fields()[2], other.brand_id)) {
-        this.brand_id = data().deepCopy(fields()[2].schema(), other.brand_id);
+      if (isValidValue(fields()[2], other.origin)) {
+        this.origin = data().deepCopy(fields()[2].schema(), other.origin);
         fieldSetFlags()[2] = other.fieldSetFlags()[2];
       }
-      if (isValidValue(fields()[3], other.category_id)) {
-        this.category_id = data().deepCopy(fields()[3].schema(), other.category_id);
+      if (isValidValue(fields()[3], other.brand_id)) {
+        this.brand_id = data().deepCopy(fields()[3].schema(), other.brand_id);
         fieldSetFlags()[3] = other.fieldSetFlags()[3];
+      }
+      if (isValidValue(fields()[4], other.category_id)) {
+        this.category_id = data().deepCopy(fields()[4].schema(), other.category_id);
+        fieldSetFlags()[4] = other.fieldSetFlags()[4];
       }
     }
 
@@ -300,17 +328,21 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
         this.time = data().deepCopy(fields()[0].schema(), other.time);
         fieldSetFlags()[0] = true;
       }
-      if (isValidValue(fields()[1], other.origin)) {
-        this.origin = data().deepCopy(fields()[1].schema(), other.origin);
+      if (isValidValue(fields()[1], other.action)) {
+        this.action = data().deepCopy(fields()[1].schema(), other.action);
         fieldSetFlags()[1] = true;
       }
-      if (isValidValue(fields()[2], other.brand_id)) {
-        this.brand_id = data().deepCopy(fields()[2].schema(), other.brand_id);
+      if (isValidValue(fields()[2], other.origin)) {
+        this.origin = data().deepCopy(fields()[2].schema(), other.origin);
         fieldSetFlags()[2] = true;
       }
-      if (isValidValue(fields()[3], other.category_id)) {
-        this.category_id = data().deepCopy(fields()[3].schema(), other.category_id);
+      if (isValidValue(fields()[3], other.brand_id)) {
+        this.brand_id = data().deepCopy(fields()[3].schema(), other.brand_id);
         fieldSetFlags()[3] = true;
+      }
+      if (isValidValue(fields()[4], other.category_id)) {
+        this.category_id = data().deepCopy(fields()[4].schema(), other.category_id);
+        fieldSetFlags()[4] = true;
       }
     }
 
@@ -354,6 +386,46 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
     }
 
     /**
+      * Gets the value of the 'action' field.
+      * @return The value.
+      */
+    public java.lang.CharSequence getAction() {
+      return action;
+    }
+
+
+    /**
+      * Sets the value of the 'action' field.
+      * @param value The value of 'action'.
+      * @return This builder.
+      */
+    public allezone_analytics.AggregatesItem.Builder setAction(java.lang.CharSequence value) {
+      validate(fields()[1], value);
+      this.action = value;
+      fieldSetFlags()[1] = true;
+      return this;
+    }
+
+    /**
+      * Checks whether the 'action' field has been set.
+      * @return True if the 'action' field has been set, false otherwise.
+      */
+    public boolean hasAction() {
+      return fieldSetFlags()[1];
+    }
+
+
+    /**
+      * Clears the value of the 'action' field.
+      * @return This builder.
+      */
+    public allezone_analytics.AggregatesItem.Builder clearAction() {
+      action = null;
+      fieldSetFlags()[1] = false;
+      return this;
+    }
+
+    /**
       * Gets the value of the 'origin' field.
       * @return The value.
       */
@@ -368,9 +440,9 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       * @return This builder.
       */
     public allezone_analytics.AggregatesItem.Builder setOrigin(java.lang.CharSequence value) {
-      validate(fields()[1], value);
+      validate(fields()[2], value);
       this.origin = value;
-      fieldSetFlags()[1] = true;
+      fieldSetFlags()[2] = true;
       return this;
     }
 
@@ -379,7 +451,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       * @return True if the 'origin' field has been set, false otherwise.
       */
     public boolean hasOrigin() {
-      return fieldSetFlags()[1];
+      return fieldSetFlags()[2];
     }
 
 
@@ -389,7 +461,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       */
     public allezone_analytics.AggregatesItem.Builder clearOrigin() {
       origin = null;
-      fieldSetFlags()[1] = false;
+      fieldSetFlags()[2] = false;
       return this;
     }
 
@@ -408,9 +480,9 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       * @return This builder.
       */
     public allezone_analytics.AggregatesItem.Builder setBrandId(java.lang.CharSequence value) {
-      validate(fields()[2], value);
+      validate(fields()[3], value);
       this.brand_id = value;
-      fieldSetFlags()[2] = true;
+      fieldSetFlags()[3] = true;
       return this;
     }
 
@@ -419,7 +491,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       * @return True if the 'brand_id' field has been set, false otherwise.
       */
     public boolean hasBrandId() {
-      return fieldSetFlags()[2];
+      return fieldSetFlags()[3];
     }
 
 
@@ -429,7 +501,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       */
     public allezone_analytics.AggregatesItem.Builder clearBrandId() {
       brand_id = null;
-      fieldSetFlags()[2] = false;
+      fieldSetFlags()[3] = false;
       return this;
     }
 
@@ -448,9 +520,9 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       * @return This builder.
       */
     public allezone_analytics.AggregatesItem.Builder setCategoryId(java.lang.CharSequence value) {
-      validate(fields()[3], value);
+      validate(fields()[4], value);
       this.category_id = value;
-      fieldSetFlags()[3] = true;
+      fieldSetFlags()[4] = true;
       return this;
     }
 
@@ -459,7 +531,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       * @return True if the 'category_id' field has been set, false otherwise.
       */
     public boolean hasCategoryId() {
-      return fieldSetFlags()[3];
+      return fieldSetFlags()[4];
     }
 
 
@@ -469,7 +541,7 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       */
     public allezone_analytics.AggregatesItem.Builder clearCategoryId() {
       category_id = null;
-      fieldSetFlags()[3] = false;
+      fieldSetFlags()[4] = false;
       return this;
     }
 
@@ -479,9 +551,10 @@ public class AggregatesItem extends org.apache.avro.specific.SpecificRecordBase 
       try {
         AggregatesItem record = new AggregatesItem();
         record.time = fieldSetFlags()[0] ? this.time : (java.time.Instant) defaultValue(fields()[0]);
-        record.origin = fieldSetFlags()[1] ? this.origin : (java.lang.CharSequence) defaultValue(fields()[1]);
-        record.brand_id = fieldSetFlags()[2] ? this.brand_id : (java.lang.CharSequence) defaultValue(fields()[2]);
-        record.category_id = fieldSetFlags()[3] ? this.category_id : (java.lang.CharSequence) defaultValue(fields()[3]);
+        record.action = fieldSetFlags()[1] ? this.action : (java.lang.CharSequence) defaultValue(fields()[1]);
+        record.origin = fieldSetFlags()[2] ? this.origin : (java.lang.CharSequence) defaultValue(fields()[2]);
+        record.brand_id = fieldSetFlags()[3] ? this.brand_id : (java.lang.CharSequence) defaultValue(fields()[3]);
+        record.category_id = fieldSetFlags()[4] ? this.category_id : (java.lang.CharSequence) defaultValue(fields()[4]);
         return record;
       } catch (org.apache.avro.AvroMissingFieldException e) {
         throw e;
