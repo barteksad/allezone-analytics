@@ -13,17 +13,14 @@ import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumReader;
 import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.avro.message.BinaryMessageDecoder;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.junit.Before;
 import org.junit.Test;
 
 import allezone_analytics.AggregatesItem;
-import allezone_analytics.AggregatesPrice;
 
 /**
  * Unit test for simple App.
