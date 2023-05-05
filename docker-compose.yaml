@@ -1,0 +1,68 @@
+version: "3.9"
+services:
+  aerospikedb:
+    image: aerospike/aerospike-server
+    networks:
+      - aerospikenetwork
+    deploy:
+      replicas: 2
+      endpoint_mode: dnsrr
+      placement:
+        max_replicas_per_node: 1
+    command: [ "--config-file", "/run/secrets/aerospike.conf" ]
+    secrets:
+      - source: conffile
+        target: aerospike.conf
+        mode: 440
+  zookeeper:
+    image: wurstmeister/zookeeper
+    networks:
+      - kafkanetwork
+  kafka:
+    image: wurstmeister/kafka:latest
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_CREATE_TOPICS: "aggregates-events:1:1"
+    deploy:
+      replicas: 2
+      placement:
+        max_replicas_per_node: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - kafkanetwork
+    depends_on:
+      - zookeeper
+
+  gateway:
+    image: st118vm101.rtb-lab.pl/gateway:latest
+    env_file: .env
+    networks:
+      - aerospikenetwork
+      - kafkanetwork
+    ports:
+      - "8088:8088"
+    deploy:
+      replicas: 2
+      placement:
+        max_replicas_per_node: 1
+    depends_on:
+      - aerospikedb
+      - kafka
+
+networks:
+  aerospikenetwork:
+    driver: overlay
+    attachable: true
+  kafkanetwork:
+    driver: overlay
+    attachable: true
+
+secrets:
+  conffile:
+    file: ./services/aerospike/aerospike.conf

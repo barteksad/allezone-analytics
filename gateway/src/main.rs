@@ -23,8 +23,8 @@ fn main() {
             let json_output = env::var("JSON_LOGGING").unwrap_or("false".to_string()) == "true";
             init_loggin(json_output);
 
-            let ip = env::var("SERVER_IP").expect("SERVER_IP must be set");
-            let port = env::var("SERVER_PORT").expect("SERVER_PORT must be set");
+            let ip = "0.0.0.0";
+            let port = env::var("GATEWAY_PORT").expect("GATEWAY_PORT must be set");
 
             let app = Router::new()
                 .route("/user_tags", post(user_tags))
