@@ -1,5 +1,14 @@
 version: "3.9"
 services:
+  postgres-allezone:
+    image: st118vm101.rtb-lab.pl/postgres-allezone:latest
+    networks:
+      - postgresnetwork
+    deploy:
+      replicas: 1
+      placement:
+        max_replicas_per_node: 1
+
   aerospikedb:
     image: aerospike/aerospike-server
     networks:
@@ -45,6 +54,7 @@ services:
     networks:
       - aerospikenetwork
       - kafkanetwork
+      - postgresnetwork
     ports:
       - "8088:8088"
     deploy:
@@ -54,12 +64,30 @@ services:
     depends_on:
       - aerospikedb
       - kafka
+      - postgres-allezone
+  
+  pipeline:
+    image: st118vm101.rtb-lab.pl/pipeline:latest
+    env_file: .env
+    networks:
+      - kafkanetwork
+      - postgresnetwork
+    deploy:
+      replicas: 1
+      placement:
+        max_replicas_per_node: 1
+    depends_on:
+      - kafka
+      - postgres-allezone
 
 networks:
   aerospikenetwork:
     driver: overlay
     attachable: true
   kafkanetwork:
+    driver: overlay
+    attachable: true
+  postgresnetwork:
     driver: overlay
     attachable: true
 
