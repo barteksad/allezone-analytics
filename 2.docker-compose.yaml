@@ -1,0 +1,38 @@
+version: "3.9"
+services:
+
+  gateway:
+    image: st118vm101.rtb-lab.pl/gateway:latest
+    env_file: .env
+    networks:
+      - aerospikenetwork
+      - kafkanetwork
+      - postgresnetwork
+    ports:
+      - "8088:8088"
+    deploy:
+      replicas: 2
+      placement:
+        max_replicas_per_node: 1
+  
+  pipeline:
+    image: st118vm101.rtb-lab.pl/pipeline:latest
+    env_file: .env
+    networks:
+      - kafkanetwork
+      - postgresnetwork
+    deploy:
+      replicas: 2
+      placement:
+        max_replicas_per_node: 1
+
+networks:
+  aerospikenetwork:
+    driver: overlay
+    attachable: true
+  kafkanetwork:
+    driver: overlay
+    attachable: true
+  postgresnetwork:
+    driver: overlay
+    attachable: true

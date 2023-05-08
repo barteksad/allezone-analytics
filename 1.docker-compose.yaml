@@ -14,7 +14,7 @@ services:
     networks:
       - aerospikenetwork
     deploy:
-      replicas: 2
+      replicas: 1
       endpoint_mode: dnsrr
       placement:
         max_replicas_per_node: 1
@@ -36,7 +36,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
       KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_CREATE_TOPICS: "aggregates-events:1:1"
+      KAFKA_CREATE_TOPICS: "aggregates-events:2:2"
     deploy:
       replicas: 2
       placement:
@@ -47,38 +47,6 @@ services:
       - kafkanetwork
     depends_on:
       - zookeeper
-
-  gateway:
-    image: st118vm101.rtb-lab.pl/gateway:latest
-    env_file: .env
-    networks:
-      - aerospikenetwork
-      - kafkanetwork
-      - postgresnetwork
-    ports:
-      - "8088:8088"
-    deploy:
-      replicas: 2
-      placement:
-        max_replicas_per_node: 1
-    depends_on:
-      - aerospikedb
-      - kafka
-      - postgres-allezone
-  
-  pipeline:
-    image: st118vm101.rtb-lab.pl/pipeline:latest
-    env_file: .env
-    networks:
-      - kafkanetwork
-      - postgresnetwork
-    deploy:
-      replicas: 1
-      placement:
-        max_replicas_per_node: 1
-    depends_on:
-      - kafka
-      - postgres-allezone
 
 networks:
   aerospikenetwork:
