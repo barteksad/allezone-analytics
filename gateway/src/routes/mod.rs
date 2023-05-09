@@ -105,12 +105,20 @@ pub async fn aggregates(
     Extension(SharedStore(sstore)): Extension<SharedStore>,
     #[cfg(feature = "query-debug")] body: Json<AggregatesResponse>,
 ) -> Response {
-    #[cfg(feature = "query-debug")]
-    {
-        // tracing::info!("\nRequest: {:?}\nExpected: {:?}", req, body);
-        return body.into_response();
-    }
-    ().into_response()
+		match sstore.get_aggregates(&req).await {
+			Ok(response) => {
+				let response_json = Json(response);
+				#[cfg(feature = "query-debug")]
+				{
+					// tracing::info!("\nRequest: {:?}\nResponse: {:?}\nExpected: {:?}", req, response_json, body);
+				}
+				return response_json.into_response();
+			}
+			Err(e) => {
+				tracing::error!("Error processing request: {:?}", e);
+				return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+			}
+		}
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -193,8 +201,8 @@ pub struct TimeRange {
 }
 
 impl SharedStore {
-    pub fn new() -> SharedStore {
-        SharedStore(Arc::new(Store::new()))
+    pub async fn new() -> SharedStore {
+        SharedStore(Arc::new(Store::new().await))
     }
 }
 

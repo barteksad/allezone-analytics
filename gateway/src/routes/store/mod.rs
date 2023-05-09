@@ -1,5 +1,6 @@
 mod aerospike_store;
 mod kafka_store;
+mod postgres_store;
 
 use crate::routes::{UserProfilesRequest, UserProfilesResponse, UserTagRequest};
 
@@ -10,9 +11,12 @@ use apache_avro::Schema;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
+use super::{AggregatesRequest, AggregatesResponse};
+
 pub struct Store {
     aerospike_store: aerospike_store::AerospikeStore,
     kafka_store: kafka_store::KafkaStore,
+    postgres_store: postgres_store::PostgresStore,
 }
 
 static SCHEMAS: Lazy<[apache_avro::Schema; 3]> = Lazy::new(|| {
@@ -44,13 +48,14 @@ struct AggregatesPrice {
 }
 
 impl Store {
-    pub fn new() -> Store {
-		// force lazy static initialization
-		Lazy::force(&SCHEMAS);
-		
+    pub async fn new() -> Store {
+        // force lazy static initialization
+        Lazy::force(&SCHEMAS);
+
         Store {
             aerospike_store: aerospike_store::AerospikeStore::new(),
             kafka_store: kafka_store::KafkaStore::new(),
+            postgres_store: postgres_store::PostgresStore::new().await,
         }
     }
 
@@ -68,6 +73,10 @@ impl Store {
 
     pub async fn add_aggregates_item(&self, user_tag: Arc<UserTagRequest>) -> Result<()> {
         self.kafka_store.add_aggregates_item(user_tag).await
+    }
+
+    pub async fn get_aggregates(&self, req: &AggregatesRequest) -> Result<AggregatesResponse> {
+        self.postgres_store.get_aggregates(req).await
     }
 }
 

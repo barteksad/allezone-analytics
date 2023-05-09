@@ -30,7 +30,7 @@ fn main() {
                 .route("/user_tags", post(user_tags))
                 .route("/user_profiles/:cookie", post(user_profiles))
                 .route("/aggregates", post(aggregates))
-                .layer(Extension(SharedStore::new()));
+                .layer(Extension(SharedStore::new().await));
 
             axum::Server::bind(&format!("{}:{}", ip, port).parse().unwrap())
                 .serve(app.into_make_service())

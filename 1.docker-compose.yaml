@@ -15,7 +15,6 @@ services:
       - aerospikenetwork
     deploy:
       replicas: 1
-      endpoint_mode: dnsrr
       placement:
         max_replicas_per_node: 1
     command: [ "--config-file", "/run/secrets/aerospike.conf" ]

@@ -6,10 +6,10 @@ GRANT ALL PRIVILEGES ON DATABASE allezone_analytics TO postgres;
 CREATE TABLE aggregates
 (
 	time		TIMESTAMP NOT NULL, 
-	action 		VARCHAR(255) NOT NULL,
-	origin		VARCHAR(255) NOT NULL,
-	brand_id	VARCHAR(255) NOT NULL,
-	category_id VARCHAR(255) NOT NULL,
+	action 		text NOT NULL,
+	origin		text NOT NULL,
+	brand_id	text NOT NULL,
+	category_id text NOT NULL,
 	count 		BIGINT NOT NULL,
 	sum 		BIGINT NOT NULL,
 	
