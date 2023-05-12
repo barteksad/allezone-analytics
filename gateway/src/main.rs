@@ -1,7 +1,9 @@
 mod routes;
 
 use axum::Extension;
+use axum::routing::get;
 use dotenv::dotenv;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use std::env;
 
 use axum::{routing::post, Router};
@@ -26,10 +28,17 @@ fn main() {
             let ip = "0.0.0.0";
             let port = env::var("GATEWAY_PORT").expect("GATEWAY_PORT must be set");
 
+			let prom_handle = PrometheusBuilder::new()
+				.install_recorder()
+				.expect("failed to install Prometheus recorder");				
+
             let app = Router::new()
                 .route("/user_tags", post(user_tags))
                 .route("/user_profiles/:cookie", post(user_profiles))
                 .route("/aggregates", post(aggregates))
+				.route("/metrics", get(metrics))
+				.layer(Extension(prom_handle))
+				.layer(opentelemetry_tracing_layer())
                 .layer(Extension(SharedStore::new().await));
 
             axum::Server::bind(&format!("{}:{}", ip, port).parse().unwrap())

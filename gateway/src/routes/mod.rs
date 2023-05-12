@@ -13,12 +13,25 @@ use serde::{
 };
 use std::{fmt, sync::Arc};
 
+use metrics_exporter_prometheus::PrometheusHandle;
+
 use self::store::Store;
 
 static DEFAULT_USER_PROFILES_REQUEST_LIMIT: usize = 200;
 
 #[derive(Clone)]
 pub struct SharedStore(Arc<Store>);
+
+/// Prometheus metrics scrape endpoint
+#[utoipa::path(
+	get,
+	tag = "Text Generation Inference",
+	path = "/metrics",
+	responses((status = 200, description = "Prometheus Metrics", body = String))
+)]
+pub async fn metrics(prom_handle: Extension<PrometheusHandle>) -> String {
+	prom_handle.render()
+}
 
 #[utoipa::path(
   post,
