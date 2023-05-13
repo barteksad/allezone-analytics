@@ -2,6 +2,7 @@ mod routes;
 
 use axum::Extension;
 use axum::routing::get;
+use axum_tracing_opentelemetry::opentelemetry_tracing_layer;
 use dotenv::dotenv;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use std::env;

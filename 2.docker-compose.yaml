@@ -8,6 +8,7 @@ services:
       - aerospikenetwork
       - kafkanetwork
       - postgresnetwork
+      - prometheusnetwork
     ports:
       - "8088:8088"
     deploy:
@@ -26,6 +27,17 @@ services:
       placement:
         max_replicas_per_node: 1
 
+  prometheus:
+    image: prom/prometheus
+    networks:
+      - prometheusnetwork
+    ports:
+      - "9090:9090"
+    secrets:
+      - source: scrape_config
+        target: /etc/prometheus/prometheus.yml
+        mode: 440
+
 networks:
   aerospikenetwork:
     driver: overlay
@@ -36,3 +48,10 @@ networks:
   postgresnetwork:
     driver: overlay
     attachable: true
+  prometheusnetwork:
+    driver: overlay
+    attachable: true
+
+secrets:
+  scrape_config:
+    file: ./services/prometheus/scrape_config.yml

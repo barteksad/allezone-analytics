@@ -11,6 +11,7 @@ use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize, Serialize,
 };
+use tokio::time::Instant;
 use std::{fmt, sync::Arc};
 
 use metrics_exporter_prometheus::PrometheusHandle;
@@ -42,10 +43,18 @@ pub async fn metrics(prom_handle: Extension<PrometheusHandle>) -> String {
 	(status=500, description="Internal server error")
   )
 )]
+#[tracing::instrument(
+	skip_all,
+	fields(
+		total_time,
+	))]
 pub async fn user_tags(
     Extension(SharedStore(sstore)): Extension<SharedStore>,
     body: Json<UserTagRequest>,
 ) -> StatusCode {
+	let start_time = Instant::now();
+	metrics::increment_counter!("user_tags-offered-load");
+
     let sstore_clone = sstore.clone();
     let body_arc1 = Arc::new(body.0);
     let body_arc2 = body_arc1.clone();
@@ -54,13 +63,24 @@ pub async fn user_tags(
         tokio::task::spawn(async move { sstore_clone.add_aggregates_item(body_arc1).await });
     let user_tag_fut = tokio::task::spawn_blocking(move || sstore.add_user_tag(body_arc2));
 
-    match tokio::try_join!(agg_item_fut, user_tag_fut) {
-        Ok((Ok(_), Ok(_))) => StatusCode::NO_CONTENT,
+ 	match tokio::try_join!(agg_item_fut, user_tag_fut) {
+        Ok((Ok(_), Ok(_))) => {
+			let total_time = start_time.elapsed();
+			metrics::histogram!("user_tags-load-time-successful", total_time.as_millis() as f64);
+			metrics::increment_counter!("user_tags-successful-load");
+			StatusCode::NO_CONTENT
+		},
         Ok((e1, e2)) => {
+			let total_time = start_time.elapsed();
+			metrics::histogram!("user_tags-load-time-failed", total_time.as_millis() as f64);
+			metrics::increment_counter!("user_tags-failed-load");
             tracing::error!("Error processing request: adding aggregate item result: {:?}, adding user tag result: {:?}", e1, e2);
             StatusCode::INTERNAL_SERVER_ERROR
         }
         Err(e) => {
+			let total_time = start_time.elapsed();
+			metrics::histogram!("user_tags-load-time-failed-internal", total_time.as_millis() as f64);
+			metrics::increment_counter!("user_tags-failed-load-internal");
             tracing::error!("Error processing request: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         }
@@ -76,18 +96,30 @@ pub async fn user_tags(
   ),
   responses((status=200, description="User profiles has been fetched successfully", body=UserProfilesResponse))
 )]
+#[tracing::instrument(
+	skip_all,
+	fields(
+		total_time,
+	))]
 pub async fn user_profiles(
     Path(cookie): Path<String>,
     Query(req): Query<UserProfilesRequest>,
     Extension(SharedStore(sstore)): Extension<SharedStore>,
-    #[cfg(feature = "query-debug")] body: Json<UserProfilesResponse>,
+    #[cfg(feature = "query-debug")] 
+	body: Json<UserProfilesResponse>,
 ) -> Response {
+	let start_time = Instant::now();
+	metrics::increment_counter!("user_profiles-offered-load");
+
     #[cfg(feature = "query-debug")]
     let time_range = req.time_range.clone();
 
     match tokio::task::spawn_blocking(move || sstore.get_user_tags(&cookie, &req)).await {
         Ok(Ok(response)) => {
             let response_json = Json(response);
+			let total_time = start_time.elapsed();
+			metrics::histogram!("user_profiles-load-time-successful", total_time.as_millis() as f64);
+			metrics::increment_counter!("user_profiles-successful-load");
             // #[cfg(feature = "query-debug")]
             // {
             //   tracing::info!("\nTime range: {:?}\nResponse: {:?}\nExpected: {:?}",time_range, response_json, body);
@@ -95,10 +127,16 @@ pub async fn user_profiles(
             return response_json.into_response();
         }
         Ok(Err(e)) => {
+			let total_time = start_time.elapsed();
+			metrics::histogram!("user_profiles-load-time-failed", total_time.as_millis() as f64);
+			metrics::increment_counter!("user_profiles-failed-load");
             tracing::error!("Error processing request: {:?}", e);
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
         Err(e) => {
+			let total_time = start_time.elapsed();
+			metrics::histogram!("user_profiles-load-time-failed-internal", total_time.as_millis() as f64);
+			metrics::increment_counter!("user_profiles-failed-load-internal");
             tracing::error!("Error processing request: {:?}", e);
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
@@ -113,25 +151,39 @@ pub async fn user_profiles(
   path="/aggregates",
   responses((status=200, description="Aggregates has been fetched successfully", body=AggregatesResponse))
 )]
+#[tracing::instrument(
+	skip_all,
+	fields(
+		total_time,
+	))]
 pub async fn aggregates(
     req: Query<AggregatesRequest>,
     Extension(SharedStore(sstore)): Extension<SharedStore>,
     #[cfg(feature = "query-debug")] body: Json<AggregatesResponse>,
 ) -> Response {
-		match sstore.get_aggregates(&req).await {
-			Ok(response) => {
-				let response_json = Json(response);
-				#[cfg(feature = "query-debug")]
-				{
-					// tracing::info!("\nRequest: {:?}\nResponse: {:?}\nExpected: {:?}", req, response_json, body);
-				}
-				return response_json.into_response();
+	let start_time = Instant::now();
+	metrics::increment_counter!("aggregates-offered-load");
+
+	match sstore.get_aggregates(&req).await {
+		Ok(response) => {
+			let response_json = Json(response);
+			let total_time = start_time.elapsed();
+			metrics::histogram!("aggregates-load-time-successful", total_time.as_millis() as f64);
+			metrics::increment_counter!("aggregates-successful-load");
+			#[cfg(feature = "query-debug")]
+			{
+				// tracing::info!("\nRequest: {:?}\nResponse: {:?}\nExpected: {:?}", req, response_json, body);
 			}
-			Err(e) => {
-				tracing::error!("Error processing request: {:?}", e);
-				return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-			}
+			return response_json.into_response();
 		}
+		Err(e) => {
+			let total_time = start_time.elapsed();
+			metrics::histogram!("aggregates-load-time-failed", total_time.as_millis() as f64);
+			metrics::increment_counter!("aggregates-failed-load");
+			tracing::error!("Error processing request: {:?}", e);
+			return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+		}
+	}
 }
 
 #[derive(Serialize, Deserialize, Debug)]
