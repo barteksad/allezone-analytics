@@ -4,12 +4,11 @@ use anyhow::Result;
 
 use aerospike::{
     as_blob, as_key,
-    operations::lists::{
-        get_by_index_range_count, insert, trim, ListOrderType, ListPolicy, ListWriteFlags,
-    },
-    Client, ClientPolicy, Error, Expiration, ResultCode, Value, WritePolicy,
+    Client, ClientPolicy, Error, Expiration, ResultCode, Value, WritePolicy, MapPolicy, 
+    operations::{MapOrder, MapWriteMode, maps::{put, remove_by_rank_range_from, get_by_rank_range}}, as_val, MapReturnType
 };
 use apache_avro::{from_avro_datum, from_value, to_avro_datum, to_value, Schema};
+use itertools::Itertools;
 
 use super::{SchemasNames, SCHEMAS};
 use crate::routes::{Action, UserProfilesRequest, UserProfilesResponse, UserTagRequest};
@@ -17,7 +16,7 @@ use crate::routes::{Action, UserProfilesRequest, UserProfilesResponse, UserTagRe
 pub struct AerospikeStore {
     client: Client,
     write_policy: WritePolicy,
-    list_policy: ListPolicy,
+    map_policy: MapPolicy,
     namespace: String,
 }
 
@@ -31,12 +30,12 @@ impl AerospikeStore {
         let client_policy = ClientPolicy::default();
         let client = Client::new(&client_policy, &hosts).expect("Failed to connect to cluster");
         let write_policy = WritePolicy::new(0, Expiration::Never);
-        let list_policy = ListPolicy::new(ListOrderType::Unordered, ListWriteFlags::Default);
+        let map_policy = MapPolicy::new(MapOrder::KeyOrdered, MapWriteMode::Update);
 
         Self {
             client,
             write_policy,
-            list_policy,
+            map_policy,
             namespace,
         }
     }
@@ -47,11 +46,12 @@ impl AerospikeStore {
 
         let schema: &Schema = &SCHEMAS[SchemasNames::UserTag as usize];
         let datum = to_avro_datum(schema, to_value(&user_tag)?)?;
-        let val = as_blob!(datum);
+        let v_key = as_val!(-user_tag.time.timestamp_millis());
+        let v_val = as_blob!(datum);
 
         let op = vec![
-            insert(&self.list_policy, &action, 0, &val),
-            trim(&action, 0, 200),
+            put(&self.map_policy, &action, &v_key, &v_val),
+            remove_by_rank_range_from(&action, 200, MapReturnType::None),
         ];
 
         match self.client.operate(&self.write_policy, &key, &op) {
@@ -73,18 +73,19 @@ impl AerospikeStore {
         let action_buy = Action::BUY.to_string();
         let action_view = Action::VIEW.to_string();
 
+        let limiti64 = req.limit.try_into().unwrap();
         let op = vec![
-            get_by_index_range_count(
+            get_by_rank_range(
                 &action_buy,
                 0,
-                200,
-                aerospike::operations::lists::ListReturnType::Values,
+                limiti64,
+                aerospike::operations::maps::MapReturnType::Value,
             ),
-            get_by_index_range_count(
+            get_by_rank_range(
                 &action_view,
                 0,
-                200,
-                aerospike::operations::lists::ListReturnType::Values,
+                limiti64,
+                aerospike::operations::maps::MapReturnType::Value,
             ),
         ];
 
@@ -135,6 +136,7 @@ impl AerospikeStore {
                 .filter_map(|r| r.ok())
                 .filter(|r| req.time_range.is_in(r.time))
                 .take(req.limit)
+                .sorted_by(|a, b| b.time.cmp(&a.time))
                 .collect()
         };
 

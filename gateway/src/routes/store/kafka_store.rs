@@ -31,8 +31,9 @@ impl KafkaStore {
     }
 
     pub async fn add_aggregates_item(&self, user_tag: Arc<UserTagRequest>) -> Result<()> {
+        let time_truncated_to_minute = user_tag.time.timestamp_millis() / (60 * 1000) * (60 * 1000);
         let aggregates_item = AggregatesItem {
-            time: user_tag.time.timestamp_millis(),
+            time: time_truncated_to_minute,
             action: user_tag.action.to_string(),
             origin: user_tag.origin.clone(),
             brand_id: user_tag.product_info.brand_id.clone(),

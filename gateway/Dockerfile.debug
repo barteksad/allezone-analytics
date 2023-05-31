@@ -1,0 +1,9 @@
+FROM rust:1.67 as builder
+WORKDIR /usr/src/gateway
+COPY . .
+RUN cargo install --features query-debug --path .
+
+FROM debian:bullseye-slim
+RUN apt-get update && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /usr/local/cargo/bin/gateway /usr/local/bin/gateway
+ENTRYPOINT ["gateway"]

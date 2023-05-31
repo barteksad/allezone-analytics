@@ -51,7 +51,8 @@ public class AppTest
         DatumReader<AggregatesItem> reader = new SpecificDatumReader<AggregatesItem>(AggregatesItem.SCHEMA$, AggregatesItem.SCHEMA$);
         BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(aggregatesItemBytes, null);
         try {
-            reader.read(null, decoder);
+            AggregatesItem item = reader.read(null, decoder);
+            System.out.println(item);
         } catch (IOException e) {
         e.printStackTrace();
         }

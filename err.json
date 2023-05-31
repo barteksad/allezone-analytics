@@ -1,0 +1,27 @@
+AggregatesResponse { columns: [
+    "1m_bucket",
+    "action",
+    "brand_id",
+    "count"
+  ], rows: [
+    [
+      "2022-03-01T00:01:00",
+      "VIEW",
+      "Game_of_Thrones",
+      "130"
+    ]
+  ]
+}, Response: AggregatesResponse { columns: [
+    "1m_bucket(time)",
+    "action",
+    "brand_id",
+    "count"
+  ], rows: [
+    [
+      "2022-03-01T00:01:00",
+      "VIEW",
+      "Game_of_Thrones",
+      "129"
+    ]
+  ]
+}

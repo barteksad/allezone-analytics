@@ -129,6 +129,9 @@ mod tests {
             let schema: &Schema = &SCHEMAS[SchemasNames::AggregatesItem as usize];
             let datum = to_avro_datum(schema, to_value(&aggregates_item).unwrap()).unwrap();
             println!("{:?}, {:}", datum, datum.len());
+            let decoded_value = from_avro_datum(schema, &mut datum.as_slice(), None).unwrap();
+            let decoded_item = apache_avro::from_value::<AggregatesItem>(&decoded_value);
+            print!("decoded item: {:?}", decoded_item);
         }
 
         {

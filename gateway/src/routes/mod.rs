@@ -111,19 +111,18 @@ pub async fn user_profiles(
 	let start_time = Instant::now();
 	metrics::increment_counter!("user_profiles-offered-load");
 
-    #[cfg(feature = "query-debug")]
-    let time_range = req.time_range.clone();
-
     match tokio::task::spawn_blocking(move || sstore.get_user_tags(&cookie, &req)).await {
         Ok(Ok(response)) => {
             let response_json = Json(response);
 			let total_time = start_time.elapsed();
 			metrics::histogram!("user_profiles-load-time-successful", total_time.as_millis() as f64);
 			metrics::increment_counter!("user_profiles-successful-load");
-            // #[cfg(feature = "query-debug")]
-            // {
-            //   tracing::info!("\nTime range: {:?}\nResponse: {:?}\nExpected: {:?}",time_range, response_json, body);
-            // }
+            #[cfg(feature = "query-debug")]
+            {
+              if body.0 != response_json.0 {
+                tracing::error!("Prof: Request: {:?}, Response: {:?}", body.0, response_json.0);
+              }
+            }
             return response_json.into_response();
         }
         Ok(Err(e)) => {
@@ -141,9 +140,6 @@ pub async fn user_profiles(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     }
-
-    // #[cfg(feature = "query-debug")]
-    // return body.into_response();
 }
 
 #[utoipa::path(
@@ -170,10 +166,12 @@ pub async fn aggregates(
 			let total_time = start_time.elapsed();
 			metrics::histogram!("aggregates-load-time-successful", total_time.as_millis() as f64);
 			metrics::increment_counter!("aggregates-successful-load");
-			#[cfg(feature = "query-debug")]
-			{
-				// tracing::info!("\nRequest: {:?}\nResponse: {:?}\nExpected: {:?}", req, response_json, body);
-			}
+            #[cfg(feature = "query-debug")]
+            {
+              if body.0 != response_json.0 {
+                tracing::error!("Agg:, Request: {:?}, Response: {:?}", body.0, response_json.0);
+              }
+            }
 			return response_json.into_response();
 		}
 		Err(e) => {
@@ -187,6 +185,7 @@ pub async fn aggregates(
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "query-debug", derive(PartialEq))]
 pub struct UserTagRequest {
     time: DateTime<Utc>,
     cookie: String,
@@ -210,6 +209,7 @@ pub struct UserProfilesRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "query-debug", derive(PartialEq))]
 pub struct UserProfilesResponse {
     cookie: String,
     views: Vec<UserTagRequest>,
@@ -232,12 +232,14 @@ pub struct AggregatesRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "query-debug", derive(PartialEq))]
 pub struct AggregatesResponse {
     columns: Vec<String>,
     rows: Vec<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "query-debug", derive(PartialEq))]
 enum Device {
     PC,
     MOBILE,
@@ -245,12 +247,14 @@ enum Device {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "query-debug", derive(PartialEq))]
 pub enum Action {
     VIEW,
     BUY,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "query-debug", derive(PartialEq))]
 struct ProductInfo {
     product_id: usize,
     brand_id: String,
@@ -259,7 +263,6 @@ struct ProductInfo {
 }
 
 #[derive(Deserialize, Debug)]
-#[cfg_attr(feature = "query-debug", derive(Clone))]
 pub struct TimeRange {
     start: DateTime<Utc>,
     end: DateTime<Utc>,
