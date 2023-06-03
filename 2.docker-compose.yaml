@@ -2,8 +2,8 @@ version: "3.9"
 services:
 
   gateway:
-    # image: st118vm101.rtb-lab.pl/gateway:latest
-    image: st118vm101.rtb-lab.pl/gateway:debug
+    image: st118vm101.rtb-lab.pl/gateway:latest
+    # image: st118vm101.rtb-lab.pl/gateway:debug
     env_file: .env
     networks:
       - aerospikenetwork

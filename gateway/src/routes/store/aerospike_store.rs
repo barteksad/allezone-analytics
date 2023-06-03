@@ -5,7 +5,7 @@ use anyhow::Result;
 use aerospike::{
     as_blob, as_key,
     Client, ClientPolicy, Error, Expiration, ResultCode, Value, WritePolicy, MapPolicy, 
-    operations::{MapOrder, MapWriteMode, maps::{put, remove_by_rank_range_from, get_by_rank_range}}, as_val, MapReturnType
+    operations::{MapOrder, MapWriteMode, maps::{put, remove_by_index_range_from, get_by_index_range}}, as_val, MapReturnType
 };
 use apache_avro::{from_avro_datum, from_value, to_avro_datum, to_value, Schema};
 use itertools::Itertools;
@@ -51,7 +51,7 @@ impl AerospikeStore {
 
         let op = vec![
             put(&self.map_policy, &action, &v_key, &v_val),
-            remove_by_rank_range_from(&action, 200, MapReturnType::None),
+            remove_by_index_range_from(&action, 200, MapReturnType::None),
         ];
 
         match self.client.operate(&self.write_policy, &key, &op) {
@@ -75,13 +75,13 @@ impl AerospikeStore {
 
         let limiti64 = req.limit.try_into().unwrap();
         let op = vec![
-            get_by_rank_range(
+            get_by_index_range(
                 &action_buy,
                 0,
                 limiti64,
                 aerospike::operations::maps::MapReturnType::Value,
             ),
-            get_by_rank_range(
+            get_by_index_range(
                 &action_view,
                 0,
                 limiti64,
