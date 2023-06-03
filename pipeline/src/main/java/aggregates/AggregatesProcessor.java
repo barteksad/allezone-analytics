@@ -39,8 +39,7 @@ public class AggregatesProcessor implements Processor<AggregatesItem, Aggregates
 			System.exit(222);
 		}
 
-		context.schedule(Duration.ofMinutes(1), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
-			Instant latestProcessed = null;
+		context.schedule(Duration.ofSeconds(10), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
 			List<Triple<AggregatesItem, Long, Long>> processedAggregates = new ArrayList<>();
 			try (final KeyValueIterator<AggregatesItem, Long> iter = countPrice.all()) {
 				while (iter.hasNext()) {
@@ -49,23 +48,15 @@ public class AggregatesProcessor implements Processor<AggregatesItem, Aggregates
 					Long count = entry.value;
 					Long sum = sumPrice.get(userId);
 					processedAggregates.add(Triple.of(userId, count, sum));
-
-					Instant userIdTime = userId.getTime();
-					if (latestProcessed == null || userIdTime.isAfter(latestProcessed)) {
-						latestProcessed = userIdTime;
-					}
 				}
 			}
 			System.out.println("Processed " + processedAggregates.size() + " items");
-			System.out.println("Latest processed: " + latestProcessed);
 
 			List<AggregatesDBItem> dbItems = new ArrayList<>();
 			for (Triple<AggregatesItem, Long, Long> item : processedAggregates) {
-				if (item.getLeft().getTime().isBefore(latestProcessed)) {
 					dbItems.add(new AggregatesDBItem(item.getLeft(), item.getMiddle(), item.getRight()));
 					countPrice.delete(item.getLeft());
 					sumPrice.delete(item.getLeft());
-				}
 			}
 
 			System.out.println("Inserting " + dbItems.size() + " items");

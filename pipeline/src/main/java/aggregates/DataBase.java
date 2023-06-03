@@ -21,7 +21,7 @@ public final class DataBase {
 
 	public void batchInsert(List<AggregatesDBItem> dbItems) {
 		try {
-			PreparedStatement stmt = conn.prepareStatement("INSERT INTO aggregates (time, action, origin, brand_id, category_id, count, sum) VALUES (?, ?, ?, ?, ?, ?, ?)");
+			PreparedStatement stmt = conn.prepareStatement("INSERT INTO aggregates (time, action, origin, brand_id, category_id, count, sum) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (time, action, origin, brand_id, category_id) DO UPDATE SET count = aggregates.count + EXCLUDED.count, sum = aggregates.sum + EXCLUDED.sum");
 			for(AggregatesDBItem item: dbItems) {
 				stmt.setTimestamp(1, item.time);
 				stmt.setString(2, item.action);

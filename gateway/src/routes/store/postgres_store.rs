@@ -1,7 +1,7 @@
 use std::{env, iter::zip};
 
 use anyhow::Result;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Duration};
 use tokio_postgres::{tls, types::ToSql, Client};
 
 use crate::routes::{Aggregates, AggregatesRequest, AggregatesResponse};
@@ -51,26 +51,30 @@ impl PostgresStore {
     pub async fn get_aggregates(&self, req: &AggregatesRequest) -> Result<AggregatesResponse> {
         let query = build_query(req);
 
-        let mut columns: Vec<String> = vec!["1m_bucket(time)".to_string(), "action".to_string()];
+        let mut columns: Vec<String> = vec!["1m_bucket".to_string(), "action".to_string()];
 
         let start_dt = req.time_range.start.naive_utc();
         let end_dt = req.time_range.end.naive_utc();
         let action_str = req.action.to_string();
 
         let mut params: Vec<&(dyn ToSql + Sync)> = vec![&start_dt, &end_dt, &action_str];
+        let mut row_values_names = vec![&action_str];
 
         if let Some(origin) = &req.origin {
             params.push(origin);
+            row_values_names.push(origin);
             columns.push("origin".to_string());
         }
 
         if let Some(brand_id) = &req.brand_id {
             params.push(brand_id);
+            row_values_names.push(brand_id);
             columns.push("brand_id".to_string());
         }
 
         if let Some(category_id) = &req.category_id {
             params.push(category_id);
+            row_values_names.push(category_id);
             columns.push("category_id".to_string());
         }
 
@@ -90,7 +94,7 @@ impl PostgresStore {
             }
         };
 
-        let rows = query_rows
+        let mut rows = query_rows
             .iter()
             .map(|row| {
                 zip(0..columns.len(), &columns)
@@ -107,6 +111,15 @@ impl PostgresStore {
                     .collect::<Vec<String>>()
             })
             .collect::<Vec<Vec<String>>>();
+
+        let n_rows_gt = req.time_range.end.signed_duration_since(req.time_range.start).num_minutes();
+        while rows.len() < n_rows_gt.try_into().unwrap() {
+            let mut row: Vec<String> = Vec::new();
+            row.push((req.time_range.start + Duration::minutes(rows.len() as i64)).format("%Y-%m-%dT%H:%M:%S").to_string());
+            row.extend(row_values_names.iter().map(|v| v.to_string()));
+            row.extend(vec!["0".to_string(); req.aggregates.0.len()]);
+            rows.push(row);
+        }
 
         Ok(AggregatesResponse { columns, rows })
     }
@@ -260,11 +273,11 @@ ORDER BY time"
         let req = AggregatesRequest {
             time_range: TimeRange {
                 start: Utc::now(),
-                end: Utc::now(),
+                end: Utc::now() + chrono::Duration::minutes(10),
             },
             action: Action::VIEW,
             origin: None,
-            brand_id: None,
+            brand_id: Some("some_brand".to_string()),
             category_id: None,
             aggregates: NAggregates(vec![Aggregates::SUM_PRICE]),
         };
