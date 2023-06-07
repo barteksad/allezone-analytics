@@ -1,7 +1,8 @@
-use std::{env, iter::zip};
+use std::{collections::HashMap, env, iter::zip};
 
 use anyhow::Result;
-use chrono::{NaiveDateTime, Duration};
+use chrono::{Duration, NaiveDateTime};
+use itertools::Itertools;
 use tokio_postgres::{tls, types::ToSql, Client};
 
 use crate::routes::{Aggregates, AggregatesRequest, AggregatesResponse};
@@ -94,7 +95,7 @@ impl PostgresStore {
             }
         };
 
-        let mut rows = query_rows
+        let rows = query_rows
             .iter()
             .map(|row| {
                 zip(0..columns.len(), &columns)
@@ -112,14 +113,33 @@ impl PostgresStore {
             })
             .collect::<Vec<Vec<String>>>();
 
-        let n_rows_gt = req.time_range.end.signed_duration_since(req.time_range.start).num_minutes();
-        while rows.len() < n_rows_gt.try_into().unwrap() {
-            let mut row: Vec<String> = Vec::new();
-            row.push((req.time_range.start + Duration::minutes(rows.len() as i64)).format("%Y-%m-%dT%H:%M:%S").to_string());
-            row.extend(row_values_names.iter().map(|v| v.to_string()));
-            row.extend(vec!["0".to_string(); req.aggregates.0.len()]);
-            rows.push(row);
-        }
+        let n_rows_gt = req
+            .time_range
+            .end
+            .signed_duration_since(req.time_range.start)
+            .num_minutes();
+
+        let full_rows: HashMap<String, Vec<String>> = (0..n_rows_gt)
+            .map(|i| {
+                let dt = req.time_range.start + Duration::minutes(i);
+                let dt_formatted = dt.format("%Y-%m-%dT%H:%M:%S").to_string();
+                let mut row: Vec<String> = Vec::new();
+                row.extend(row_values_names.iter().map(|v| v.to_string()));
+                row.extend(vec!["0".to_string(); req.aggregates.0.len()]);
+                (dt_formatted, row)
+            })
+            .chain(rows.into_iter().map(|r| (r[0].to_owned(), r[1..].to_vec())))
+            .collect();
+
+        let rows = full_rows
+            .into_iter()
+            .map(|(k, v)| {
+                let mut row = vec![k];
+                row.extend(v);
+                row
+            })
+            .sorted_by(|a, b| a[0].cmp(&b[0]))
+            .collect::<Vec<Vec<String>>>();
 
         Ok(AggregatesResponse { columns, rows })
     }
@@ -160,7 +180,7 @@ fn build_query(req: &AggregatesRequest) -> String {
 
     for aggregate in &req.aggregates.0 {
         match aggregate {
-            Aggregates::COUNT => select.push_str(", COUNT(count)"),
+            Aggregates::COUNT => select.push_str(", SUM(count)::BIGINT"),
             Aggregates::SUM_PRICE => select.push_str(", SUM(sum)::BIGINT"),
         }
     }
@@ -197,7 +217,7 @@ mod tests {
         assert_eq!(
             query.replace("\t", ""),
             "
-SELECT time, action, origin, brand_id, category_id, COUNT(count), SUM(sum)::BIGINT
+SELECT time, action, origin, brand_id, category_id, SUM(count)::BIGINT, SUM(sum)::BIGINT
 FROM aggregates
 WHERE time >= $1 and time < $2
 	AND action = $3
@@ -225,7 +245,7 @@ ORDER BY time"
         assert_eq!(
             query2.replace("\t", ""),
             "
-SELECT time, action, COUNT(count), SUM(sum)::BIGINT
+SELECT time, action, SUM(count)::BIGINT, SUM(sum)::BIGINT
 FROM aggregates
 WHERE time >= $1 and time < $2
 	AND action = $3
@@ -250,7 +270,7 @@ ORDER BY time"
         assert_eq!(
             query3.replace("\t", ""),
             "
-SELECT time, action, brand_id, COUNT(count), SUM(sum)::BIGINT
+SELECT time, action, brand_id, SUM(count)::BIGINT, SUM(sum)::BIGINT
 FROM aggregates
 WHERE time >= $1 and time < $2
 	AND action = $3

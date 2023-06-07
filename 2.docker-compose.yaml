@@ -2,8 +2,8 @@ version: "3.9"
 services:
 
   gateway:
-    image: st118vm101.rtb-lab.pl/gateway:latest
-    # image: st118vm101.rtb-lab.pl/gateway:debug
+    # image: st118vm101.rtb-lab.pl/gateway:latest
+    image: st118vm101.rtb-lab.pl/gateway:debug
     env_file: .env
     networks:
       - aerospikenetwork
@@ -17,6 +17,9 @@ services:
       replicas: 2
       placement:
         max_replicas_per_node: 1
+        constraints:
+          - node.labels.service == gateway
+
   
   pipeline:
     image: st118vm101.rtb-lab.pl/pipeline:latest
@@ -28,6 +31,8 @@ services:
       replicas: 2
       placement:
         max_replicas_per_node: 1
+        constraints:
+          - node.labels.service == pipeline
 
   prometheus:
     image: prom/prometheus

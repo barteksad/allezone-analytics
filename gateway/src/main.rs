@@ -20,6 +20,7 @@ fn main() {
     tokio::runtime::Builder::new_multi_thread()
         // .worker_threads(4)
         .enable_all()
+        .max_blocking_threads(1024)
         .build()
         .unwrap()
         .block_on(async {
@@ -55,7 +56,7 @@ fn init_loggin(json_output: bool) {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_file(true)
         .with_line_number(true);
-
+    
     let fmt_layer = match json_output {
         true => fmt_layer.json().flatten_event(true).boxed(),
         false => fmt_layer.boxed(),

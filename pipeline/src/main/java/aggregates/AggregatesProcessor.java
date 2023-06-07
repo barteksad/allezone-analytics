@@ -2,8 +2,6 @@ package aggregates;
 
 import java.sql.SQLException;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,14 +21,12 @@ import allezone_analytics.AggregatesPrice;
 public class AggregatesProcessor implements Processor<AggregatesItem, AggregatesPrice, AggregatesItem, Long> {
 	private KeyValueStore<AggregatesItem, Long> countPrice;
 	private KeyValueStore<AggregatesItem, Long> sumPrice;
-	private ProcessorContext<AggregatesItem, Long> processorcContext;
 	private DataBase db;
 
 	@Override
 	public void init(ProcessorContext<AggregatesItem, Long> context) {
 		countPrice = context.getStateStore("aggregates-price-count");
 		sumPrice = context.getStateStore("aggregates-price-sum");
-		processorcContext = context;
 
 		try {
 			db = new DataBase();
@@ -39,8 +35,9 @@ public class AggregatesProcessor implements Processor<AggregatesItem, Aggregates
 			System.exit(222);
 		}
 
-		context.schedule(Duration.ofSeconds(10), PunctuationType.WALL_CLOCK_TIME, timestamp -> {
+		context.schedule(Duration.ofSeconds(10), PunctuationType.STREAM_TIME, timestamp -> {
 			List<Triple<AggregatesItem, Long, Long>> processedAggregates = new ArrayList<>();
+			List<AggregatesDBItem> dbItems = new ArrayList<>();
 			try (final KeyValueIterator<AggregatesItem, Long> iter = countPrice.all()) {
 				while (iter.hasNext()) {
 					final KeyValue<AggregatesItem, Long> entry = iter.next();
@@ -48,24 +45,21 @@ public class AggregatesProcessor implements Processor<AggregatesItem, Aggregates
 					Long count = entry.value;
 					Long sum = sumPrice.get(userId);
 					processedAggregates.add(Triple.of(userId, count, sum));
+					dbItems.add(new AggregatesDBItem(userId, count, sum));
 				}
 			}
 			System.out.println("Processed " + processedAggregates.size() + " items");
 
-			List<AggregatesDBItem> dbItems = new ArrayList<>();
-			for (Triple<AggregatesItem, Long, Long> item : processedAggregates) {
-					dbItems.add(new AggregatesDBItem(item.getLeft(), item.getMiddle(), item.getRight()));
+			if (db.batchInsert(dbItems)) {
+				System.out.println("Inserted " + dbItems.size() + " items");
+				for (Triple<AggregatesItem, Long, Long> item : processedAggregates) {
 					countPrice.delete(item.getLeft());
 					sumPrice.delete(item.getLeft());
+				}
+			} else {
+				System.out.println("Failed to insert " + dbItems.size() + " items");
 			}
 
-			System.out.println("Inserting " + dbItems.size() + " items");
-			db.batchInsert(dbItems);
-
-			countPrice.flush();
-			sumPrice.flush();
-
-			processorcContext.commit();
 		});
 	}
 
@@ -73,8 +67,6 @@ public class AggregatesProcessor implements Processor<AggregatesItem, Aggregates
 	public void process(Record<AggregatesItem, AggregatesPrice> record) {
 		AggregatesItem item = record.key();
 		AggregatesPrice price = record.value();
-
-		item.setTime(item.getTime().truncatedTo(ChronoUnit.MINUTES));
 
 		Long count = countPrice.get(item);
 		if (count == null) {

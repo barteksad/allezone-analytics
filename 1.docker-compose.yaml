@@ -8,8 +8,10 @@ services:
       replicas: 1
       placement:
         max_replicas_per_node: 1
+        constraints:
+          - node.labels.service == postgres
 
-  aerospikedb:
+  aerospikedb1:
     image: aerospike/aerospike-server
     networks:
       - aerospikenetwork
@@ -17,15 +19,35 @@ services:
       replicas: 1
       placement:
         max_replicas_per_node: 1
+        constraints:
+          - node.labels.service == aerospike1
     command: [ "--config-file", "/run/secrets/aerospike.conf" ]
     secrets:
-      - source: conffile
+      - source: conffile1
         target: aerospike.conf
         mode: 440
+
+  aerospikedb2:
+    image: aerospike/aerospike-server
+    networks:
+      - aerospikenetwork
+    deploy:
+      replicas: 1
+      placement:
+        max_replicas_per_node: 1
+        constraints:
+          - node.labels.service == aerospike2
+    command: [ "--config-file", "/run/secrets/aerospike.conf" ]
+    secrets:
+      - source: conffile2
+        target: aerospike.conf
+        mode: 440
+        
   zookeeper:
     image: wurstmeister/zookeeper
     networks:
       - kafkanetwork
+
   kafka:
     image: wurstmeister/kafka:latest
     environment:
@@ -35,11 +57,14 @@ services:
       KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://_{HOSTNAME_COMMAND}:9094
       KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
-      KAFKA_CREATE_TOPICS: "aggregates-events:10:2"
+      KAFKA_CREATE_TOPICS: "aggregates-events:2:1"
     deploy:
       replicas: 2
       placement:
         max_replicas_per_node: 1
+        constraints:
+          - node.labels.service == kafka
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -59,5 +84,7 @@ networks:
     attachable: true
 
 secrets:
-  conffile:
-    file: ./services/aerospike/aerospike.conf
+  conffile1:
+    file: ./services/aerospike/aerospike1.conf
+  conffile2:
+    file: ./services/aerospike/aerospike2.conf

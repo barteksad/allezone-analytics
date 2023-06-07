@@ -8,19 +8,26 @@ import allezone_analytics.AggregatesItem;
 import io.github.cdimascio.dotenv.Dotenv;
 
 public final class DataBase {
-	private final Connection conn;
+	private Connection conn;
+	private final Properties props;
+	private final String url;
 
 	public DataBase() throws SQLException {
 		Dotenv dotenv = Dotenv.load();
 
-		Properties props = buildProps(dotenv);
-		String url = buildUrl(dotenv);
 
-		conn = DriverManager.getConnection(url, props);
+		props = buildProps(dotenv);
+		url = buildUrl(dotenv);
+		esatblishConnection();
 	}
 
-	public void batchInsert(List<AggregatesDBItem> dbItems) {
+	public boolean batchInsert(List<AggregatesDBItem> dbItems) {
 		try {
+			if(conn.isClosed()) {
+				esatblishConnection();
+				if(conn.isClosed())
+					return false;
+			} 
 			PreparedStatement stmt = conn.prepareStatement("INSERT INTO aggregates (time, action, origin, brand_id, category_id, count, sum) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (time, action, origin, brand_id, category_id) DO UPDATE SET count = aggregates.count + EXCLUDED.count, sum = aggregates.sum + EXCLUDED.sum");
 			for(AggregatesDBItem item: dbItems) {
 				stmt.setTimestamp(1, item.time);
@@ -33,9 +40,23 @@ public final class DataBase {
 				stmt.addBatch();
 			}
 			stmt.executeBatch();
-		} catch (SQLException e) {
-			e.printStackTrace();
+			conn.commit();
+			return true;
+		} catch (SQLException e1) {
+			e1.printStackTrace();
+			try {
+				conn.rollback();
+			} catch (SQLException e2) {
+				e1.printStackTrace();
+				return false;
+			}
+			return false;
 		}
+	}
+
+	private final void esatblishConnection() throws SQLException {
+		conn = DriverManager.getConnection(url, props);
+		conn.setAutoCommit(false);
 	}
 
 	static private String buildUrl(Dotenv dotenv) {

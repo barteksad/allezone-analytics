@@ -50,7 +50,9 @@ struct AggregatesPrice {
 impl Store {
     pub async fn new() -> Store {
         // force lazy static initialization
-        Lazy::force(&SCHEMAS);
+        if Lazy::force(&SCHEMAS).len() != 3 {
+            panic!("Failed to initialize SCHEMAS");
+        }
 
         Store {
             aerospike_store: aerospike_store::AerospikeStore::new(),
