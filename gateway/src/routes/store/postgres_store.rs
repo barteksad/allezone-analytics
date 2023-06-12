@@ -25,12 +25,14 @@ ORDER BY time";
 impl PostgresStore {
     pub async fn new() -> Self {
         let host = env::var("DB_HOST").expect("DB_HOST is not set");
+        let port = env::var("DB_PORT").expect("DB_PORT is not set");
         let user = env::var("DB_USER").expect("DB_USER is not set");
         let password = env::var("DB_PASSWORD").expect("DB_PASSWORD is not set");
         let dbname = env::var("DB_NAME").expect("DB_NAME is not set");
 
         let mut config = tokio_postgres::Config::new();
         config.host(&host);
+        config.port(port.parse::<u16>().unwrap());
         config.user(&user);
         config.password(&password);
         config.dbname(&dbname);
