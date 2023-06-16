@@ -59,7 +59,7 @@ services:
       placement:
         max_replicas_per_node: 1
         constraints:
-          - node.labels.service == postgres
+          - node.labels.service == patroni1
 
   patroni2:
     image: patronitraining/patroni
@@ -73,7 +73,7 @@ services:
       placement:
         max_replicas_per_node: 1
         constraints:
-          - node.labels.service == postgres
+          - node.labels.service == patroni2
 
   aerospikedb1:
     image: aerospike/aerospike-server
