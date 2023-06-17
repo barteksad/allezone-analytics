@@ -39,7 +39,7 @@
 \
 &emsp; &emsp; 2.docker-compose.yaml - stateless services: api-gateway, kafka-streams, monitoring: prometheus, grafana
 
-Before deploying, make sure to have nodes with at least thsoe labels, or delete them from docker-compose.yml: 
+Before deploying, make sure to have nodes with at least those labels, or delete them from docker-compose.yml: 
 ```
 [st118vm101]: map[service:gateway]
 [st118vm102]: map[service:gateway]
@@ -64,8 +64,8 @@ docker stack deploy -c 1.docker-compose.yaml my_stack
 psql --host 127.0.0.1 --port 5000 -U postgres < services/postgres/init.sql
 docker stack deploy -c 2.docker-compose.yaml my_stack
 ```
+## Debug mode: 
 \
-Debug mode: 
 API gateway can be compiled with debug mode enabled, which will compare received results.
 \
 It can be disabled by not specifying --features query-debug flag in docker-compose.yml.
