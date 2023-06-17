@@ -18,15 +18,4 @@ CREATE TABLE aggregates
 
 CREATE INDEX count_lookup1 ON aggregates (time, action);
 
--- Add triggers which removes items older than 24h than currently inserted one
-CREATE OR REPLACE FUNCTION remove_older_items() RETURNS TRIGGER AS $$
-BEGIN
-	DELETE FROM aggregates WHERE time < (NEW.time - INTERVAL '24 hours');
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER remove_older_items_trigger
-AFTER INSERT OR UPDATE ON aggregates
-EXECUTE PROCEDURE remove_older_items();
-
 

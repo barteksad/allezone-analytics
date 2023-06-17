@@ -105,8 +105,7 @@ pub async fn user_profiles(
     Path(cookie): Path<String>,
     Query(req): Query<UserProfilesRequest>,
     Extension(SharedStore(sstore)): Extension<SharedStore>,
-    #[cfg(feature = "query-debug")] 
-	body: Json<UserProfilesResponse>,
+    #[cfg(feature = "query-debug")] body: Json<UserProfilesResponse>,
 ) -> Response {
 	let start_time = Instant::now();
 	metrics::increment_counter!("user_profiles-offered-load");
